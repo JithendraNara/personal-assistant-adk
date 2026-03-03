@@ -2,32 +2,43 @@
 Callback system — guardrails, logging, memory warmup, session lifecycle.
 
 Inspired by OpenClaw's middleware pattern, adapted for ADK's callback API.
+
+ADK Callback Signatures (from API reference):
+  before_agent_callback(context: Context) -> Content | None
+  after_agent_callback(context: Context) -> Content | None
+  before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse | None
+  after_model_callback(callback_context: CallbackContext, llm_response: LlmResponse) -> LlmResponse | None
+  before_tool_callback(tool: BaseTool, args: dict, tool_context: ToolContext) -> dict | None
+  after_tool_callback(tool: BaseTool, args: dict, tool_context: ToolContext, tool_response: dict) -> dict | None
 """
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any
 
+from google.adk.agents import Context
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest, LlmResponse
+from google.adk.tools import BaseTool
+from google.adk.tools import ToolContext
 from google.genai import types
 
 logger = logging.getLogger(__name__)
 
 
-# ─── Before Agent Callback ──────────────────────────────────────────────────────────────
+# ─── Before Agent Callback ────────────────────────────────────────────────────
 # Runs before agent starts processing. Used for:
 # - Session warmup (inject context from workspace files)
 # - Daily session rotation check
 # - Interaction logging
 
-async def before_agent_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+async def before_agent_callback(context: Context) -> Optional[types.Content]:
     """
     Pre-agent hook: injects workspace identity, checks session age, logs interaction.
     Returns None to proceed, or Content to short-circuit.
     """
-    agent_name = callback_context.agent_name
-    state = callback_context.state
+    agent_name = context.agent_name
+    state = context.state
 
     # Track interaction count
     count = state.get("_interaction_count", 0)
@@ -57,18 +68,18 @@ async def before_agent_callback(callback_context: CallbackContext) -> Optional[t
     return None  # Proceed to agent
 
 
-# ─── After Agent Callback ───────────────────────────────────────────────────────────────
+# ─── After Agent Callback ─────────────────────────────────────────────────────
 # Runs after agent completes. Used for:
 # - Auto-save to memory (like OpenClaw's session archival)
 # - Interaction metrics
 # - Session size pruning trigger
 
-async def after_agent_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+async def after_agent_callback(context: Context) -> Optional[types.Content]:
     """
     Post-agent hook: logs metrics, triggers memory save on significant interactions.
     """
-    agent_name = callback_context.agent_name
-    state = callback_context.state
+    agent_name = context.agent_name
+    state = context.state
 
     # Calculate turn duration
     start_time = state.get("temp:turn_start_time", time.time())
@@ -91,7 +102,7 @@ async def after_agent_callback(callback_context: CallbackContext) -> Optional[ty
     return None
 
 
-# ─── Before Model Callback ──────────────────────────────────────────────────────────────
+# ─── Before Model Callback ────────────────────────────────────────────────────
 # Runs before sending request to LLM. Used for:
 # - Input guardrails (block sensitive data patterns)
 # - Request logging
@@ -136,7 +147,7 @@ async def before_model_callback(
     return None  # Proceed to LLM
 
 
-# ─── After Model Callback ───────────────────────────────────────────────────────────────
+# ─── After Model Callback ─────────────────────────────────────────────────────
 # Runs after receiving LLM response. Used for:
 # - Response sanitization
 # - Response quality logging
@@ -152,53 +163,53 @@ async def after_model_callback(
     return None  # Use LLM response as-is
 
 
-# ─── Before Tool Callback ───────────────────────────────────────────────────────────────
+# ─── Before Tool Callback ─────────────────────────────────────────────────────
 # Runs before executing a tool. Used for:
 # - Argument validation
 # - Rate limiting
 # - Tool usage logging
 
 async def before_tool_callback(
-    callback_context: CallbackContext, tool_name: str, tool_args: dict
+    tool: BaseTool, args: dict[str, Any], tool_context: ToolContext
 ) -> Optional[dict]:
     """
     Pre-tool hook: validates arguments, logs tool usage.
     """
-    agent_name = callback_context.agent_name
-    state = callback_context.state
+    agent_name = tool_context.agent_name
+    state = tool_context.state
 
     # Track tool usage for analytics
     tool_calls = state.get("_tool_calls", [])
     tool_calls.append({
-        "tool": tool_name,
+        "tool": tool.name,
         "agent": agent_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     # Keep only last 50 tool calls to prevent state bloat
     state["_tool_calls"] = tool_calls[-50:]
 
-    logger.info(f"[{agent_name}] Calling tool: {tool_name}")
+    logger.info(f"[{agent_name}] Calling tool: {tool.name}")
     return None  # Execute tool
 
 
-# ─── After Tool Callback ────────────────────────────────────────────────────────────────
+# ─── After Tool Callback ──────────────────────────────────────────────────────
 # Runs after tool execution. Used for:
 # - Result caching
 # - Error enrichment
 # - Tool result logging
 
 async def after_tool_callback(
-    callback_context: CallbackContext, tool_name: str, tool_result: dict
+    tool: BaseTool, args: dict[str, Any], tool_context: ToolContext, tool_response: dict
 ) -> Optional[dict]:
     """
     Post-tool hook: logs result, enriches errors.
     """
-    agent_name = callback_context.agent_name
+    agent_name = tool_context.agent_name
 
     # If tool returned an error, enrich it
-    if isinstance(tool_result, dict) and tool_result.get("error"):
-        logger.warning(f"[{agent_name}] Tool {tool_name} returned error: {tool_result['error']}")
-        tool_result["_suggestion"] = "Check API keys in .env if this is an external service error."
+    if isinstance(tool_response, dict) and tool_response.get("error"):
+        logger.warning(f"[{agent_name}] Tool {tool.name} returned error: {tool_response['error']}")
+        tool_response["_suggestion"] = "Check API keys in .env if this is an external service error."
 
-    logger.debug(f"[{agent_name}] Tool {tool_name} completed")
+    logger.debug(f"[{agent_name}] Tool {tool.name} completed")
     return None  # Use tool result as-is

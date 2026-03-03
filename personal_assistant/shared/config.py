@@ -22,6 +22,7 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 #   Gemini (default):  gemini-2.0-flash, gemini-1.5-pro
 #   OpenAI:            openai/gpt-4o, openai/gpt-4o-mini
 #   Anthropic:         anthropic/claude-sonnet-4-20250514
+#   MiniMax:           minimax/MiniMax-M2.5
 #   Ollama (local):    ollama/llama3, ollama/mistral
 #   Any LiteLLM model: https://docs.litellm.ai/docs/providers
 #
@@ -29,6 +30,7 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 #   Gemini    → GOOGLE_API_KEY
 #   OpenAI    → OPENAI_API_KEY
 #   Anthropic → ANTHROPIC_API_KEY
+#   MiniMax   → MINIMAX_API_KEY (+ MINIMAX_API_BASE=https://api.minimax.io/v1)
 #   Ollama    → no key needed (local)
 
 _DEFAULT_MODEL_STR = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash")
@@ -68,6 +70,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
 SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "")
 SPORTS_API_KEY = os.getenv("SPORTS_API_KEY", "")
@@ -144,13 +147,14 @@ def validate_config() -> dict:
         GOOGLE_API_KEY,
         OPENAI_API_KEY,
         ANTHROPIC_API_KEY,
+        MINIMAX_API_KEY,
         os.getenv("OLLAMA_API_BASE"),  # Ollama doesn't need a key, just a base URL
     ])
     
     if not has_any_llm_key:
         issues.append(
             "No LLM API key found. Set at least one of: "
-            "GOOGLE_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, "
+            "GOOGLE_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, MINIMAX_API_KEY, "
             "or OLLAMA_API_BASE for local models."
         )
     
@@ -160,6 +164,8 @@ def validate_config() -> dict:
         issues.append(f"DEFAULT_MODEL is '{model_str}' but OPENAI_API_KEY is not set.")
     elif model_str.startswith('anthropic/') and not ANTHROPIC_API_KEY:
         issues.append(f"DEFAULT_MODEL is '{model_str}' but ANTHROPIC_API_KEY is not set.")
+    elif model_str.startswith('minimax/') and not MINIMAX_API_KEY:
+        issues.append(f"DEFAULT_MODEL is '{model_str}' but MINIMAX_API_KEY is not set.")
     elif ('/' not in model_str or model_str.startswith('gemini')) and not GOOGLE_API_KEY:
         issues.append(f"DEFAULT_MODEL is '{model_str}' but GOOGLE_API_KEY is not set.")
     

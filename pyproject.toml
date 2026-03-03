@@ -19,7 +19,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+litellm = [
+    "litellm",
+]
 dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+all = [
+    "litellm",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",

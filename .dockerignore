@@ -1,0 +1,9 @@
+__pycache__
+*.pyc
+.env
+.git
+.venv
+*.tar.gz
+sessions.db
+data/uploads/*
+tests/__pycache__

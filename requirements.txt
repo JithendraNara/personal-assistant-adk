@@ -1,0 +1,39 @@
+# Google ADK
+google-adk>=0.1.0
+
+# Environment & Config
+python-dotenv>=1.0.0
+
+# Data Analysis (for data_agent tools)
+pandas>=2.2.0
+numpy>=1.26.0
+
+# HTTP Client (for real API integrations)
+httpx>=0.27.0
+
+# Optional: Real API integrations
+# Uncomment as you wire up real APIs:
+
+# serpapi>=0.1.5              # Web search via SerpApi (research_agent)
+# google-search-results       # Alternative SerpApi client
+
+# newsapi-python>=0.2.7       # News headlines (research_agent)
+
+# alpaca-trade-api            # Stock trading / quotes (finance_agent)
+# yfinance>=0.2.36            # Yahoo Finance (finance_agent) — no key required
+
+# plaid-python                # Bank account data (finance_agent)
+
+# google-cloud-aiplatform     # For VertexAiMemoryBankService (production memory)
+# google-cloud-firestore      # For Firestore-backed session persistence
+
+# todoist-api-python          # Todoist integration (scheduler_agent)
+# google-auth-oauthlib        # Google Calendar OAuth (scheduler_agent)
+# google-api-python-client    # Google Calendar API (scheduler_agent)
+
+# Development Tools
+# pytest>=8.0.0
+# pytest-asyncio>=0.23.0
+# black>=24.0.0
+# ruff>=0.3.0
+# mypy>=1.9.0

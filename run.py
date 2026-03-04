@@ -29,7 +29,6 @@ from personal_assistant.shared.config import (
     create_session_service, create_memory_service, create_artifact_service,
 )
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 from personal_assistant.agent import root_agent
 
@@ -194,7 +193,7 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
     print(f"{DIM}User: {USER_PROFILE['name']} | {USER_PROFILE['locations']['primary']} | {service_type}{RESET}")
     print(f"{DIM}Session: {session_id}{RESET}\n")
     print_agent_list()
-    print(f"{DIM}Commands: help, agents, session, save, clear, quit{RESET}\n")
+    print(f"{DIM}Commands: /help, /agents, /session, /save, /security, /skills, /memory, /status, quit{RESET}\n")
     print(f"{BOLD}{'─' * 64}{RESET}\n")
 
     # Interactive loop
@@ -214,31 +213,90 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
                 await save_to_memory(memory_service, session_service, session_id, user_id)
                 print(f"\n{DIM}Session saved. Goodbye!{RESET}\n")
                 break
-            elif cmd == "help":
+            elif cmd in ("/help", "help"):
                 print(f"""
-{BOLD}Commands:{RESET}
-  help       — Show this message
-  agents     — List specialist agents
-  session    — Show session info
-  save       — Save session to memory
-  clear      — Clear screen
-  briefing   — Run daily briefing workflow
-  quit       — Exit (auto-saves)
+{BOLD}Slash Commands:{RESET}
+  /help       — Show this message
+  /agents     — List specialist agents
+  /session    — Show session info
+  /save       — Save session to memory
+  /security   — Run security audit
+  /skills     — List loaded skills
+  /memory     — Show memory statistics
+  /status     — Show full system status
+  /clear      — Clear screen
+  quit        — Exit (auto-saves)
 """)
                 continue
-            elif cmd == "agents":
+            elif cmd in ("/agents", "agents"):
                 print_agent_list()
                 continue
-            elif cmd == "session":
+            elif cmd in ("/session", "session"):
                 print(f"\n{DIM}Session: {session_id} | User: {user_id} | Turns: {turn_count}{RESET}")
                 continue
-            elif cmd == "clear":
+            elif cmd in ("/clear", "clear"):
                 os.system("clear" if os.name != "nt" else "cls")
                 print_banner()
                 continue
-            elif cmd == "save":
+            elif cmd in ("/save", "save"):
                 await save_to_memory(memory_service, session_service, session_id, user_id)
                 print(f"{DIM}Session saved to memory.{RESET}")
+                continue
+            elif cmd == "/security":
+                try:
+                    from personal_assistant.shared.security import security_audit
+                    audit = security_audit()
+                    status_icon = {"pass": "✅", "warning": "⚠️", "fail": "❌"}
+                    print(f"\n{BOLD}Security Audit — {status_icon.get(audit['status'], '?')} {audit['status'].upper()}{RESET}")
+                    for check in audit["checks"]:
+                        icon = status_icon.get(check["status"], "·")
+                        print(f"  {icon} {check['name']}: {check['detail']}")
+                    for warn in audit.get("warnings", []):
+                        print(f"  {YELLOW}{warn}{RESET}")
+                    for rec in audit.get("recommendations", []):
+                        print(f"  {DIM}→ {rec}{RESET}")
+                except Exception as e:
+                    print(f"{RED}Security audit error: {e}{RESET}")
+                continue
+            elif cmd == "/skills":
+                try:
+                    from personal_assistant.shared.skills import discover_skills
+                    skills = discover_skills()
+                    if skills:
+                        print(f"\n{BOLD}Loaded Skills ({len(skills)}):{RESET}")
+                        for s in skills:
+                            target = f" → {s.agent_target}" if s.agent_target else " → all agents"
+                            print(f"  🛠️  {CYAN}{s.name}{RESET}{DIM}{target}{RESET}")
+                            if s.description:
+                                print(f"     {DIM}{s.description}{RESET}")
+                    else:
+                        print(f"{DIM}No skills found in workspace/skills/{RESET}")
+                except Exception as e:
+                    print(f"{RED}Skills error: {e}{RESET}")
+                continue
+            elif cmd == "/memory":
+                session = await session_service.get_session(
+                    app_name=APP_NAME, user_id=user_id, session_id=session_id
+                )
+                if session:
+                    state = session.state or {}
+                    tasks = state.get("scheduler_tasks", [])
+                    reminders = state.get("scheduler_reminders", [])
+                    tool_calls = state.get("_tool_calls", [])
+                    agents_used = state.get("user:agents_used", [])
+                    print(f"\n{BOLD}Memory Stats:{RESET}")
+                    print(f"  Tasks: {len(tasks)} | Reminders: {len(reminders)}")
+                    print(f"  Tool calls: {len(tool_calls)} | Agents used: {', '.join(agents_used) or 'none'}")
+                    print(f"  Interactions: {state.get('_interaction_count', 0)}")
+                continue
+            elif cmd == "/status":
+                print(f"\n{BOLD}System Status:{RESET}")
+                print(f"  Session: {session_id}")
+                print(f"  User: {user_id}")
+                print(f"  Turns: {turn_count}")
+                print(f"  Session backend: {type(session_service).__name__}")
+                print(f"  Memory backend: {type(memory_service).__name__}")
+                print(f"  Agents: {len(root_agent.sub_agents)} specialist agents")
                 continue
 
             # Run agent turn

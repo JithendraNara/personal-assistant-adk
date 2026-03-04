@@ -23,6 +23,8 @@ from google.adk.tools import BaseTool
 from google.adk.tools import ToolContext
 from google.genai import types
 
+from personal_assistant.shared.security import check_tool_access, sanitize_input
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,22 +124,16 @@ async def before_model_callback(
         if last_content.parts:
             last_text = last_content.parts[0].text or ""
 
-            # Guardrail: block potential credential exposure
-            import re
-            sensitive_patterns = [
-                r"(?i)(password|secret|token)\s*[:=]\s*\S+",
-                r"(?i)(api[_-]?key)\s*[:=]\s*\S+",
-                r"\b[A-Za-z0-9+/]{40,}\b",  # Long base64-like strings
-            ]
-            for pattern in sensitive_patterns:
-                if re.search(pattern, last_text):
-                    logger.warning(f"[{agent_name}] Potential sensitive data detected in input — blocking")
+            # Guardrail: use security module for input sanitization
+            _, detected = sanitize_input(last_text)
+            if detected:
+                    logger.warning(f"[{agent_name}] Sensitive data detected ({detected}) — blocking")
                     return LlmResponse(
                         content=types.Content(
                             role="model",
                             parts=[types.Part(text=(
                                 "I noticed your message may contain sensitive information "
-                                "(credentials, API keys, etc.). For security, I've blocked this request. "
+                                f"({', '.join(detected)}). For security, I've blocked this request. "
                                 "Please remove any sensitive data and try again."
                             ))]
                         )
@@ -177,6 +173,12 @@ async def before_tool_callback(
     """
     agent_name = tool_context.agent_name
     state = tool_context.state
+
+    # Per-agent tool access policy check (OpenClaw sandbox pattern)
+    allowed, reason = check_tool_access(agent_name, tool.name)
+    if not allowed:
+        logger.warning(f"[{agent_name}] Tool access denied: {tool.name} — {reason}")
+        return {"error": f"Access denied: {reason}"}
 
     # Track tool usage for analytics
     tool_calls = state.get("_tool_calls", [])

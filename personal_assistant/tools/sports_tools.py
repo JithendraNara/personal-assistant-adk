@@ -5,7 +5,7 @@ Covers NFL, Cricket, and F1 scores, standings, and news.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 SPORTS_API_KEY = os.getenv("SPORTS_API_KEY", "")
@@ -98,7 +98,7 @@ def get_nfl_scores(week: Optional[int] = None, team: Optional[str] = None) -> di
         "season": "2024",
         "games": mock_games,
         "source": "mock — configure SPORTS_API_KEY for live scores",
-        "fetched_at": datetime.utcnow().isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -238,5 +238,5 @@ def get_cricket_scores(
         "recent_matches": mock_recent,
         "upcoming_matches": mock_upcoming,
         "source": "mock — configure CRICAPI_KEY for live scores",
-        "fetched_at": datetime.utcnow().isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }

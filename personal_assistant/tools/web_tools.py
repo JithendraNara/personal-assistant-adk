@@ -5,9 +5,8 @@ NOTE: Functions marked with "# REAL API" comments show where to integrate
 live API calls. Mock data is returned when keys are not configured.
 """
 
-import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 # REAL API: from serpapi import GoogleSearch
@@ -60,7 +59,7 @@ def web_search(query: str, num_results: int = 5) -> dict:
         "query": query,
         "source": "mock — configure SERPAPI_KEY for live results",
         "results": mock_results,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -145,7 +144,7 @@ def get_news_headlines(
             "title": f"[Mock] Latest news about {topic} — article {i + 1}",
             "url": f"https://news.example.com/{topic.replace(' ', '-')}-{i + 1}",
             "source": "MockNews",
-            "published_at": datetime.utcnow().isoformat(),
+            "published_at": datetime.now(timezone.utc).isoformat(),
             "description": (
                 f"Placeholder news article {i + 1} about {topic}. "
                 "Set NEWS_API_KEY in .env for real headlines."
@@ -159,7 +158,7 @@ def get_news_headlines(
         "topic": topic,
         "source": "mock — configure NEWS_API_KEY for live headlines",
         "articles": mock_articles,
-        "fetched_at": datetime.utcnow().isoformat(),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

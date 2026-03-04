@@ -7,12 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
-
-# Copy application
+# Copy application first (needed for pip install to find the package)
 COPY . .
+
+# Install Python deps
+RUN pip install --no-cache-dir .
 
 # Create data directories
 RUN mkdir -p data/uploads

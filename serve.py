@@ -11,7 +11,9 @@ Usage:
 """
 
 import os
+import json
 import logging
+from typing import Optional
 from datetime import datetime, timezone
 from uuid import uuid4
 from contextlib import asynccontextmanager
@@ -19,7 +21,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -35,7 +37,7 @@ from personal_assistant.agent import root_agent
 logger = logging.getLogger(__name__)
 
 # ─── Globals (initialized at startup) ────────────────────────────────────────
-runner: Runner = None
+runner: Optional[Runner] = None
 session_service = None
 memory_service = None
 
@@ -75,9 +77,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS — environment-aware (OpenClaw security pattern)
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _cors_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -215,6 +219,70 @@ async def save_session_to_memory(user_id: str, session_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/config")
+async def get_config():
+    """Runtime config introspection (OpenClaw gateway config concept)."""
+    return {
+        "app_name": APP_NAME,
+        "session_service": type(session_service).__name__ if session_service else None,
+        "memory_service": type(memory_service).__name__ if memory_service else None,
+        "cors_origins": _cors_origins,
+        "agents": [a.name for a in root_agent.sub_agents] if hasattr(root_agent, 'sub_agents') else [],
+    }
+
+
+@app.websocket("/ws")
+async def websocket_stream(websocket: WebSocket):
+    """WebSocket endpoint for real-time agent streaming (OpenClaw gateway pattern)."""
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            payload = json.loads(data)
+            message = payload.get("message", "")
+            user_id = payload.get("user_id", "default")
+            session_id = payload.get("session_id")
+
+            if not session_id:
+                today = datetime.now(timezone.utc).strftime("%Y%m%d")
+                session_id = f"session_{today}_{uuid4().hex[:6]}"
+                await session_service.create_session(
+                    app_name=APP_NAME,
+                    user_id=user_id,
+                    session_id=session_id,
+                    state={"user:name": user_id},
+                )
+
+            content = genai_types.Content(
+                role="user",
+                parts=[genai_types.Part(text=message)],
+            )
+
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=content,
+            ):
+                event_data = {
+                    "type": "event",
+                    "author": getattr(event, 'author', None),
+                    "is_final": event.is_final_response(),
+                    "session_id": session_id,
+                }
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            event_data["text"] = part.text
+                            await websocket.send_text(json.dumps(event_data))
+
+            await websocket.send_text(json.dumps({"type": "done", "session_id": session_id}))
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}", exc_info=True)
+        await websocket.close(code=1011, reason=str(e))
 
 
 if __name__ == "__main__":

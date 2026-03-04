@@ -1,0 +1,11 @@
+{
+    "name": "example-logger",
+    "version": "0.1.0",
+    "description": "Example plugin that logs all agent turns for analytics and debugging.",
+    "enabled": true,
+    "config": {
+        "log_file": "data/plugin_logs.jsonl",
+        "verbose": false
+    },
+    "hooks": ["on_load", "on_unload", "before_turn", "after_turn"]
+}

@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UnifiedMemory — Your AI Memory Layer</title>
+    <meta name="description" content="Cross-platform memory for all your AI agents. One brain, everywhere.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #1e1e35;
+            --border: #2a2a40;
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888a8;
+            --text-dim: #55556a;
+            --accent: #7c5cfc;
+            --accent-light: #9d84ff;
+            --accent-glow: rgba(124, 92, 252, 0.15);
+            --green: #4ade80;
+            --green-dim: rgba(74, 222, 128, 0.1);
+            --orange: #fb923c;
+            --orange-dim: rgba(251, 146, 60, 0.1);
+            --red: #f87171;
+            --red-dim: rgba(248, 113, 113, 0.1);
+            --blue: #60a5fa;
+            --blue-dim: rgba(96, 165, 250, 0.1);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ─── Layout ──────────────────────────────────────── */
+        .app { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            z-index: 10;
+        }
+        .main {
+            margin-left: 260px;
+            flex: 1;
+            padding: 32px 40px;
+            min-height: 100vh;
+        }
+
+        /* ─── Logo ────────────────────────────────────────── */
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 8px;
+            margin-bottom: 32px;
+        }
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+        }
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo-badge {
+            font-size: 10px;
+            background: var(--accent-glow);
+            color: var(--accent-light);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        /* ─── Nav ─────────────────────────────────────────── */
+        .nav { flex: 1; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+        }
+        .nav-item:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        .nav-item.active {
+            background: var(--accent-glow);
+            color: var(--accent-light);
+        }
+        .nav-item .icon { font-size: 18px; width: 22px; text-align: center; }
+
+        .nav-section {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            padding: 16px 12px 8px;
+            font-weight: 600;
+        }
+
+        /* ─── Sidebar footer ──────────────────────────────── */
+        .sidebar-footer {
+            padding: 16px 12px;
+            border-top: 1px solid var(--border);
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 8px var(--green);
+        }
+        .status-text { font-size: 12px; color: var(--text-secondary); }
+
+        /* ─── Page Header ─────────────────────────────────── */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+        }
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .page-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ─── Stats Grid ─────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        .stat-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(124, 92, 252, 0.1);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-change {
+            font-size: 12px;
+            color: var(--green);
+            margin-top: 6px;
+        }
+
+        /* ─── Cards ───────────────────────────────────────── */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* ─── Buttons ─────────────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #6d4de8);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(124, 92, 252, 0.4);
+        }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        .btn-danger {
+            background: var(--red-dim);
+            color: var(--red);
+            border: 1px solid rgba(248, 113, 113, 0.2);
+        }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        /* ─── Input ───────────────────────────────────────── */
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        input[type="text"], textarea, select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border 0.2s;
+            width: 100%;
+        }
+        input:focus, textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        textarea { resize: vertical; min-height: 80px; }
+
+        /* ─── Memory List ─────────────────────────────────── */
+        .memory-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+        .memory-item:hover { background: var(--bg-card-hover); }
+        .memory-item:last-child { border-bottom: none; }
+        .memory-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+        .memory-dot.fact { background: var(--blue); }
+        .memory-dot.preference { background: var(--accent); }
+        .memory-dot.episode { background: var(--orange); }
+        .memory-dot.temporal { background: var(--red); }
+        .memory-dot.skill { background: var(--green); }
+        .memory-dot.project { background: #facc15; }
+        .memory-content { flex: 1; }
+        .memory-text { font-size: 14px; line-height: 1.5; }
+        .memory-meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+        .memory-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .memory-tag.fact { background: var(--blue-dim); color: var(--blue); }
+        .memory-tag.preference { background: var(--accent-glow); color: var(--accent-light); }
+        .memory-tag.skill { background: var(--green-dim); color: var(--green); }
+        .memory-tag.episode { background: var(--orange-dim); color: var(--orange); }
+        .memory-tag.temporal { background: var(--red-dim); color: var(--red); }
+        .memory-tag.project { background: rgba(250, 204, 21, 0.1); color: #facc15; }
+        .memory-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+        /* ─── Profile ─────────────────────────────────────── */
+        .profile-section { margin-bottom: 24px; }
+        .profile-section h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+        }
+        .profile-fact {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .profile-fact::before {
+            content: '•';
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        /* ─── Config Blocks ───────────────────────────────── */
+        .config-block {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        .config-block pre {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            color: var(--accent-light);
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .config-label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .copy-btn {
+            position: absolute;
+            top: 12px; right: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .copy-btn:hover { color: var(--accent-light); border-color: var(--accent); }
+
+        /* ─── Search Results ──────────────────────────────── */
+        .score-bar {
+            width: 60px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        .score-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        /* ─── Empty State ─────────────────────────────────── */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state p { font-size: 14px; max-width: 300px; margin: 0 auto; }
+
+        /* ─── Toast ───────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 24px; right: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            border-radius: var(--radius-sm);
+            padding: 12px 20px;
+            font-size: 14px;
+            color: var(--text-primary);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
+        /* ─── Page transitions ────────────────────────────── */
+        .page { display: none; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── Responsive ──────────────────────────────────── */
+        @media (max-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 20px; }
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ─── Loading spinner ─────────────────────────────── */
+        .spinner {
+            width: 20px; height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">🧠</div>
+                <div>
+                    <div class="logo-text">UnifiedMemory</div>
+                    <div class="logo-badge">SELF-HOSTED</div>
+                </div>
+            </div>
+
+            <nav class="nav">
+                <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+                    <span class="icon">📊</span> Dashboard
+                </div>
+                <div class="nav-item" data-page="memories" onclick="showPage('memories')">
+                    <span class="icon">🧠</span> Memories
+                </div>
+                <div class="nav-item" data-page="search" onclick="showPage('search')">
+                    <span class="icon">🔍</span> Search
+                </div>
+                <div class="nav-item" data-page="profile" onclick="showPage('profile')">
+                    <span class="icon">👤</span> Profile
+                </div>
+
+                <div class="nav-section">Integration</div>
+                <div class="nav-item" data-page="connect" onclick="showPage('connect')">
+                    <span class="icon">🔌</span> Connect
+                </div>
+                <div class="nav-item" data-page="api" onclick="showPage('api')">
+                    <span class="icon">⚡</span> API Docs
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="status-dot"></span>
+                <span class="status-text">Engine running · SQLite</span>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Dashboard Page -->
+            <div class="page active" id="page-dashboard">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Dashboard</h1>
+                        <p class="page-subtitle">Your cross-platform AI memory at a glance</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showPage('memories')">+ Add Memory</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Memories</div>
+                        <div class="stat-value" id="stat-total">—</div>
+                        <div class="stat-change" id="stat-total-change"></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Platforms Synced</div>
+                        <div class="stat-value" id="stat-platforms">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Memory Types</div>
+                        <div class="stat-value" id="stat-types">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Storage</div>
+                        <div class="stat-value" id="stat-storage">—</div>
+                        <div class="stat-change">~/.unified-memory/</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Recent Memories</h2>
+                        <button class="btn btn-ghost btn-sm" onclick="showPage('memories')">View All</button>
+                    </div>
+                    <div id="recent-memories">
+                        <div class="empty-state">
+                            <div class="icon">🧠</div>
+                            <p>No memories yet. Add your first memory or connect an AI tool.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Source Distribution</h2>
+                    </div>
+                    <div id="source-chart" style="display: flex; gap: 12px; flex-wrap: wrap;"></div>
+                </div>
+            </div>
+
+            <!-- Memories Page -->
+            <div class="page" id="page-memories">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Memories</h1>
+                        <p class="page-subtitle">Browse and manage your stored knowledge</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Add Memory</h2>
+                    </div>
+                    <textarea id="add-content" placeholder="Enter information to remember... Facts, preferences, project context, conversations — anything your AI should know about you."></textarea>
+                    <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center;">
+                        <select id="add-source" style="width: 140px;">
+                            <option value="manual">Manual</option>
+                            <option value="adk">ADK</option>
+                            <option value="claude">Claude</option>
+                            <option value="codex">Codex</option>
+                            <option value="openclaw">OpenClaw</option>
+                        </select>
+                        <label style="font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                            <input type="checkbox" id="auto-extract" checked> Auto-extract facts
+                        </label>
+                        <div style="flex:1"></div>
+                        <button class="btn btn-primary" onclick="addMemory()">💾 Save to Memory</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">All Memories</h2>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="filter-type" onchange="loadMemories()" style="width: 120px;">
+                                <option value="">All types</option>
+                                <option value="fact">Facts</option>
+                                <option value="preference">Preferences</option>
+                                <option value="skill">Skills</option>
+                                <option value="episode">Episodes</option>
+                                <option value="project">Projects</option>
+                                <option value="temporal">Temporal</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="memory-list">
+                        <div class="empty-state">
+                            <div class="spinner"></div>
+                            <p style="margin-top: 16px;">Loading memories...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Page -->
+            <div class="page" id="page-search">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Search</h1>
+                        <p class="page-subtitle">Hybrid semantic + keyword search across all memories</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="input-group">
+                        <input type="text" id="search-query" placeholder="What do you want to recall?" onkeydown="if(event.key==='Enter') searchMemories()">
+                        <select id="search-mode" style="width: 130px;">
+                            <option value="hybrid">Hybrid</option>
+                            <option value="semantic">Semantic</option>
+                            <option value="keyword">Keyword</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="searchMemories()">🔍 Search</button>
+                    </div>
+                </div>
+
+                <div id="search-results"></div>
+            </div>
+
+            <!-- Profile Page -->
+            <div class="page" id="page-profile">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Profile</h1>
+                        <p class="page-subtitle">Auto-maintained from your memories</p>
+                    </div>
+                    <button class="btn btn-ghost" onclick="loadProfile()">🔄 Refresh</button>
+                </div>
+                <div id="profile-content">
+                    <div class="empty-state"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Connect Page -->
+            <div class="page" id="page-connect">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Connect Your AI Tools</h1>
+                        <p class="page-subtitle">Add UnifiedMemory to any MCP-compatible AI client</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">🤖 Claude Desktop / Claude Code</h2></div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                        Add to <code>~/.claude/settings.json</code> or Claude Desktop config:
+                    </p>
+                    <div class="config-block">
+                        <button class="copy-btn" onclick="copyConfig('claude')">Copy</button>
+                        <pre id="config-claude">{
+  "mcpServers": {
+    "unified-memory": {
+      "command": "python3",
+      "args": ["-m", "personal_assistant.memory.server"]
+    }
+  }
+}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">🖱️ Cursor / Windsurf / VS Code</h2></div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                        Add to your MCP client configuration:
+                    </p>
+                    <div class="config-block">
+                        <button class="copy-btn" onclick="copyConfig('cursor')">Copy</button>
+                        <pre id="config-cursor">{
+  "mcpServers": {
+    "unified-memory": {
+      "command": "python3",
+      "args": ["-m", "personal_assistant.memory.server"]
+    }
+  }
+}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">🌐 REST API (OpenClaw, Codex, Custom)</h2></div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+                        Start the REST server and use HTTP endpoints:
+                    </p>
+                    <div class="config-block">
+                        <button class="copy-btn" onclick="copyConfig('rest')">Copy</button>
+                        <pre id="config-rest"># Start the memory API server
+python3 -m personal_assistant.memory.server --transport rest
+
+# Endpoints:
+POST   /memories           — Add memories
+POST   /memories/search    — Search memories  
+GET    /memories/profile/  — Get user profile
+GET    /memories/stats     — Statistics
+DELETE /memories/{id}      — Forget a memory</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">🐍 Python SDK</h2></div>
+                    <div class="config-block">
+                        <button class="copy-btn" onclick="copyConfig('python')">Copy</button>
+                        <pre id="config-python">from personal_assistant.memory.engine import UnifiedMemoryEngine
+
+engine = UnifiedMemoryEngine()
+
+# Add a memory
+await engine.add("User prefers dark mode", container_tag="user_123")
+
+# Search
+results = await engine.search("preferences", container_tag="user_123")
+
+# Get profile
+profile = await engine.profile("user_123")
+print(profile.static_facts)   # Long-term facts
+print(profile.dynamic_context) # Recent context</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Docs Page -->
+            <div class="page" id="page-api">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">API Reference</h1>
+                        <p class="page-subtitle">Full REST API documentation</p>
+                    </div>
+                    <a class="btn btn-ghost" href="/docs" target="_blank">📄 OpenAPI Docs</a>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title" style="margin-bottom: 16px;">POST /memories</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">Add new memories with automatic fact extraction.</p>
+                    <div class="config-block">
+                        <pre>{
+  "content": "I'm a senior engineer working on ADK",
+  "container_tag": "jeethendra",
+  "source": "manual",
+  "auto_extract": true
+}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title" style="margin-bottom: 16px;">POST /memories/search</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">Hybrid semantic + keyword search.</p>
+                    <div class="config-block">
+                        <pre>{
+  "query": "What programming languages does the user know?",
+  "container_tag": "jeethendra",
+  "limit": 5,
+  "mode": "hybrid"
+}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title" style="margin-bottom: 16px;">GET /memories/profile/{tag}</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">Auto-built user profile with static facts and dynamic context.</p>
+                    <div class="config-block">
+                        <pre>// Response
+{
+  "container_tag": "jeethendra",
+  "static_facts": ["Senior engineer", "Uses Python", "Prefers dark mode"],
+  "dynamic_context": ["Building memory system", "Working on ADK project"]
+}</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title" style="margin-bottom: 16px;">MCP Tools</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">Available via MCP server for Claude, Cursor, etc.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="config-block"><pre>save_memory
+"Save important info to memory"</pre></div>
+                        <div class="config-block"><pre>recall
+"Search memories for context"</pre></div>
+                        <div class="config-block"><pre>get_profile
+"Get user profile"</pre></div>
+                        <div class="config-block"><pre>forget
+"Remove a memory by ID"</pre></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '';  // Same origin
+        const CONTAINER = 'jeethendra';
+
+        // ─── Navigation ──────────────────────────────────────
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
+
+            if (page === 'dashboard') loadDashboard();
+            if (page === 'memories') loadMemories();
+            if (page === 'profile') loadProfile();
+        }
+
+        // ─── Toast ───────────────────────────────────────────
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // ─── API Helpers ─────────────────────────────────────
+        async function api(path, opts = {}) {
+            try {
+                const res = await fetch(API + path, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...opts,
+                });
+                return await res.json();
+            } catch (e) {
+                console.error('API error:', e);
+                showToast('⚠️ API error — is the server running?');
+                return null;
+            }
+        }
+
+        // ─── Dashboard ──────────────────────────────────────
+        async function loadDashboard() {
+            const stats = await api(`/memories/stats?container_tag=${CONTAINER}`);
+            if (!stats) return;
+
+            document.getElementById('stat-total').textContent = stats.total || 0;
+            document.getElementById('stat-platforms').textContent = stats.cross_platform?.platforms_synced || 0;
+            document.getElementById('stat-types').textContent = Object.keys(stats.by_type || {}).length;
+            document.getElementById('stat-storage').textContent = 'SQLite';
+
+            // Source chart
+            const sources = stats.cross_platform?.sources || stats.by_source || {};
+            const chartEl = document.getElementById('source-chart');
+            if (Object.keys(sources).length === 0) {
+                chartEl.innerHTML = '<p style="color: var(--text-dim); font-size: 13px;">No sources yet</p>';
+            } else {
+                const colors = { adk: 'var(--accent)', claude: 'var(--blue)', manual: 'var(--green)', mcp: 'var(--orange)', rest: '#facc15', codex: 'var(--red)', openclaw: '#a78bfa' };
+                chartEl.innerHTML = Object.entries(sources).map(([k, v]) =>
+                    `<div style="background: ${colors[k] || 'var(--border)'}22; border: 1px solid ${colors[k] || 'var(--border)'}44; padding: 12px 20px; border-radius: var(--radius-sm);">
+                        <div style="font-size: 20px; font-weight: 700; color: ${colors[k] || 'var(--text-primary)'}">${v}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${k}</div>
+                    </div>`
+                ).join('');
+            }
+
+            // Recent memories
+            const data = await api(`/memories/search`, {
+                method: 'POST',
+                body: JSON.stringify({ query: '', container_tag: CONTAINER, limit: 5, mode: 'keyword' }),
+            });
+            if (data?.results?.length) {
+                document.getElementById('recent-memories').innerHTML = data.results.map(r => renderMemory(r.memory)).join('');
+            }
+        }
+
+        // ─── Memories ────────────────────────────────────────
+        async function loadMemories() {
+            const el = document.getElementById('memory-list');
+            el.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+
+            const type = document.getElementById('filter-type').value;
+            // Use search with empty query to get all
+            const data = await api(`/memories/search`, {
+                method: 'POST',
+                body: JSON.stringify({ query: ' ', container_tag: CONTAINER, limit: 100, mode: 'keyword' }),
+            });
+
+            if (!data || !data.results?.length) {
+                el.innerHTML = '<div class="empty-state"><div class="icon">🧠</div><p>No memories found. Add your first one above!</p></div>';
+                return;
+            }
+
+            let items = data.results.map(r => r.memory);
+            if (type) items = items.filter(m => m.memory_type === type);
+            el.innerHTML = items.map(m => renderMemory(m)).join('') || '<div class="empty-state"><p>No memories of this type.</p></div>';
+        }
+
+        function renderMemory(m) {
+            const date = new Date(m.updated_at || m.created_at).toLocaleDateString();
+            return `<div class="memory-item">
+                <div class="memory-dot ${m.memory_type}"></div>
+                <div class="memory-content">
+                    <div class="memory-text">${escHtml(m.content)}</div>
+                    <div class="memory-meta">
+                        <span class="memory-tag ${m.memory_type}">${m.memory_type}</span>
+                        <span>via ${m.source}</span>
+                        <span>${date}</span>
+                        <span style="opacity: 0.5">${m.id}</span>
+                    </div>
+                </div>
+                <div class="memory-actions">
+                    <button class="btn btn-danger btn-sm" onclick="forgetMemory('${m.id}')">🗑</button>
+                </div>
+            </div>`;
+        }
+
+        async function addMemory() {
+            const content = document.getElementById('add-content').value.trim();
+            if (!content) return showToast('Enter some content first');
+
+            const source = document.getElementById('add-source').value;
+            const autoExtract = document.getElementById('auto-extract').checked;
+
+            const data = await api('/memories', {
+                method: 'POST',
+                body: JSON.stringify({
+                    content,
+                    container_tag: CONTAINER,
+                    source,
+                    auto_extract: autoExtract,
+                }),
+            });
+
+            if (data) {
+                showToast(`✅ Saved ${data.saved} memor${data.saved > 1 ? 'ies' : 'y'}`);
+                document.getElementById('add-content').value = '';
+                loadMemories();
+            }
+        }
+
+        async function forgetMemory(id) {
+            if (!confirm('Forget this memory?')) return;
+            await api(`/memories/${id}`, { method: 'DELETE' });
+            showToast('🗑 Memory forgotten');
+            loadMemories();
+        }
+
+        // ─── Search ──────────────────────────────────────────
+        async function searchMemories() {
+            const query = document.getElementById('search-query').value.trim();
+            if (!query) return showToast('Enter a search query');
+
+            const mode = document.getElementById('search-mode').value;
+            const el = document.getElementById('search-results');
+            el.innerHTML = '<div class="card"><div class="empty-state"><div class="spinner"></div></div></div>';
+
+            const data = await api('/memories/search', {
+                method: 'POST',
+                body: JSON.stringify({ query, container_tag: CONTAINER, limit: 10, mode }),
+            });
+
+            if (!data?.results?.length) {
+                el.innerHTML = '<div class="card"><div class="empty-state"><div class="icon">🔍</div><p>No results found. Try a different query.</p></div></div>';
+                return;
+            }
+
+            el.innerHTML = '<div class="card"><div class="card-header"><h2 class="card-title">Results (' + data.results.length + ')</h2></div>' +
+                data.results.map(r => {
+                    const pct = Math.round(r.score * 100);
+                    return `<div class="memory-item">
+                        <div class="memory-dot ${r.memory.memory_type}"></div>
+                        <div class="memory-content">
+                            <div class="memory-text">${escHtml(r.memory.content)}</div>
+                            <div class="memory-meta">
+                                <span class="memory-tag ${r.memory.memory_type}">${r.memory.memory_type}</span>
+                                <span>${r.match_type}</span>
+                                <span>${pct}% match <span class="score-bar"><span class="score-fill" style="width:${pct}%"></span></span></span>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('') + '</div>';
+        }
+
+        // ─── Profile ─────────────────────────────────────────
+        async function loadProfile() {
+            const el = document.getElementById('profile-content');
+            el.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+
+            const data = await api(`/memories/profile/${CONTAINER}`);
+            if (!data) return;
+
+            const sf = (data.static_facts || []);
+            const dc = (data.dynamic_context || []);
+
+            el.innerHTML = `
+                <div class="card">
+                    <div class="profile-section">
+                        <h3>📌 Static Facts (Long-term)</h3>
+                        ${sf.length ? sf.map(f => '<div class="profile-fact">' + escHtml(f) + '</div>').join('') :
+                          '<p style="color: var(--text-dim); font-size: 13px;">No static facts yet. Add memories to build your profile.</p>'}
+                    </div>
+                    <div class="profile-section">
+                        <h3>⚡ Dynamic Context (Recent)</h3>
+                        ${dc.length ? dc.map(c => '<div class="profile-fact">' + escHtml(c) + '</div>').join('') :
+                          '<p style="color: var(--text-dim); font-size: 13px;">No recent context. Your dynamic profile updates automatically.</p>'}
+                    </div>
+                    <div style="margin-top: 16px; font-size: 12px; color: var(--text-dim);">
+                        Last updated: ${data.last_updated ? new Date(data.last_updated).toLocaleString() : 'Never'}
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h2 class="card-title">Prompt Context (Copy for System Prompt)</h2></div>
+                    <div class="config-block">
+                        <button class="copy-btn" onclick="copyProfile()">Copy</button>
+                        <pre id="profile-prompt">${escHtml(formatProfilePrompt(sf, dc))}</pre>
+                    </div>
+                </div>`;
+        }
+
+        function formatProfilePrompt(sf, dc) {
+            let parts = [];
+            if (sf.length) parts.push('About this user:\n' + sf.map(f => '- ' + f).join('\n'));
+            if (dc.length) parts.push('Currently:\n' + dc.map(c => '- ' + c).join('\n'));
+            return parts.join('\n\n') || 'No profile data yet.';
+        }
+
+        function copyProfile() {
+            navigator.clipboard.writeText(document.getElementById('profile-prompt').textContent);
+            showToast('📋 Profile copied to clipboard');
+        }
+
+        // ─── Config Copy ─────────────────────────────────────
+        function copyConfig(id) {
+            const text = document.getElementById('config-' + id).textContent;
+            navigator.clipboard.writeText(text);
+            showToast('📋 Copied to clipboard');
+        }
+
+        // ─── Utils ───────────────────────────────────────────
+        function escHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s || '';
+            return div.innerHTML;
+        }
+
+        // ─── Init ────────────────────────────────────────────
+        loadDashboard();
+    </script>
+</body>
+</html>

@@ -66,6 +66,15 @@ async def lifespan(app: FastAPI):
     )
 
     logger.info(f"Server started | Session: {type(session_service).__name__} | Memory: {type(memory_service).__name__}")
+
+    # Register A2A protocol routes (agent discovery + task endpoint)
+    try:
+        from personal_assistant.shared.a2a import register_a2a_routes
+        register_a2a_routes(app, runner, session_service, APP_NAME)
+        logger.info("A2A routes registered (/.well-known/agent.json, /a2a)")
+    except Exception as e:
+        logger.warning(f"A2A routes not registered: {e}")
+
     yield
     logger.info("Server shutting down")
 

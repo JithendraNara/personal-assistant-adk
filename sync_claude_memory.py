@@ -91,7 +91,7 @@ def push_to_unified_memory(facts: list[dict]):
 
     print(f"\n🚀 Pushing to UnifiedMemory ({API_URL})...")
     print(f"   Container: {CONTAINER_TAG}")
-    print(f"   Auto-extract: ON (MiniMax M2.5)")
+    print("   Auto-extract: ON (MiniMax M2.5)")
     print()
 
     for cat, items in batches.items():
@@ -130,10 +130,10 @@ def push_to_unified_memory(facts: list[dict]):
         time.sleep(2)
 
     print(f"\n{'='*50}")
-    print(f"📊 Sync Complete!")
+    print("📊 Sync Complete!")
     print(f"   ✅ Saved: {success_count} memories")
     print(f"   ❌ Errors: {error_count}")
-    print(f"   🧠 All memories are now searchable across all your AI tools")
+    print("   🧠 All memories are now searchable across all your AI tools")
 
 
 def verify_connection():

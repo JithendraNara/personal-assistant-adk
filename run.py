@@ -21,12 +21,13 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from dotenv import load_dotenv
-load_dotenv()
-
 from personal_assistant.shared.config import (
     validate_config, APP_NAME, USER_PROFILE,
-    create_session_service, create_memory_service, create_artifact_service,
+    create_session_service,
+    create_memory_service,
+    create_artifact_service,
+    create_adk_app,
+    create_default_run_config,
 )
 from google.adk.runners import Runner
 from google.genai import types as genai_types
@@ -62,6 +63,11 @@ def print_banner():
 {RESET}""")
 
 
+def clear_terminal_screen() -> None:
+    """Clear terminal content using ANSI escape sequences."""
+    print("\033[2J\033[H", end="", flush=True)
+
+
 def print_agent_list():
     agents = [
         ("research_agent", "Web search, news, summarization"),
@@ -81,7 +87,16 @@ def print_agent_list():
     print()
 
 
-async def run_turn(runner: Runner, session_id: str, user_id: str, message: str) -> str:
+async def run_turn(
+    runner: Runner,
+    session_id: str,
+    user_id: str,
+    message: str,
+    *,
+    invocation_id: str | None = None,
+    state_delta: dict | None = None,
+    run_config=None,
+) -> str:
     """Send one message and collect the full response."""
     content = genai_types.Content(
         role="user",
@@ -94,7 +109,10 @@ async def run_turn(runner: Runner, session_id: str, user_id: str, message: str) 
     async for event in runner.run_async(
         user_id=user_id,
         session_id=session_id,
+        invocation_id=invocation_id,
+        state_delta=state_delta,
         new_message=content,
+        run_config=run_config,
     ):
         # Track which agents are involved
         if hasattr(event, 'author') and event.author and event.author not in agents_involved:
@@ -152,6 +170,8 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
     session_service = create_session_service()
     memory_service = create_memory_service()
     artifact_service = create_artifact_service()
+    adk_runtime_app = create_adk_app(root_agent)
+    default_run_config = create_default_run_config()
 
     service_type = type(session_service).__name__
     logger.info(f"Session service: {service_type}")
@@ -181,8 +201,7 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
 
     # Set up runner with all services
     runner = Runner(
-        agent=root_agent,
-        app_name=APP_NAME,
+        app=adk_runtime_app,
         session_service=session_service,
         memory_service=memory_service,
         artifact_service=artifact_service,
@@ -235,7 +254,7 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
                 print(f"\n{DIM}Session: {session_id} | User: {user_id} | Turns: {turn_count}{RESET}")
                 continue
             elif cmd in ("/clear", "clear"):
-                os.system("clear" if os.name != "nt" else "cls")
+                clear_terminal_screen()
                 print_banner()
                 continue
             elif cmd in ("/save", "save"):
@@ -246,10 +265,13 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
                 try:
                     from personal_assistant.shared.security import security_audit
                     audit = security_audit()
-                    status_icon = {"pass": "✅", "warning": "⚠️", "fail": "❌"}
-                    print(f"\n{BOLD}Security Audit — {status_icon.get(audit['status'], '?')} {audit['status'].upper()}{RESET}")
+                    status_symbols = {"ok": "✅", "warning": "⚠️", "fail": "❌"}
+                    audit_status = audit["status"]
+                    status_key = "ok" if audit_status == "pass" else audit_status
+                    print(f"\n{BOLD}Security Audit — {status_symbols.get(status_key, '?')} {audit_status.upper()}{RESET}")
                     for check in audit["checks"]:
-                        icon = status_icon.get(check["status"], "·")
+                        check_status = "ok" if check["status"] == "pass" else check["status"]
+                        icon = status_symbols.get(check_status, "·")
                         print(f"  {icon} {check['name']}: {check['detail']}")
                     for warn in audit.get("warnings", []):
                         print(f"  {YELLOW}{warn}{RESET}")
@@ -304,7 +326,13 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
             print(f"\n{CYAN}{BOLD}Assistant:{RESET} ", end="", flush=True)
 
             try:
-                response = await run_turn(runner, session_id, user_id, user_input)
+                response = await run_turn(
+                    runner,
+                    session_id,
+                    user_id,
+                    user_input,
+                    run_config=default_run_config,
+                )
                 print(response)
 
                 # Auto-save to memory every 5 turns

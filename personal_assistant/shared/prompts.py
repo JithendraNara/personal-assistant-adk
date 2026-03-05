@@ -3,7 +3,7 @@ Prompt templates using InstructionProvider pattern.
 Workspace identity files are injected dynamically at each turn.
 """
 from google.adk.agents.readonly_context import ReadonlyContext
-from .config import SOUL_MD, USER_MD, AGENTS_MD, IDENTITY_MD, USER_PROFILE
+from .config import SOUL_MD, USER_MD, AGENTS_MD, USER_PROFILE
 
 
 def root_instruction_provider(context: ReadonlyContext) -> str:
@@ -41,8 +41,17 @@ def root_instruction_provider(context: ReadonlyContext) -> str:
 Your primary job is to understand the user's request and route it to the most appropriate specialist agent.
 You can also answer simple questions directly if they don't need specialized tools.
 
-When routing, use `transfer_to_agent` with the agent name. When the request spans multiple domains,
-handle the primary domain first, then chain to the secondary.
+When routing, use `transfer_to_agent` with the agent name.
+
+Routing rules:
+- Weather-only request -> transfer to `parallel_weather`
+- Sports-only request -> transfer to `sports_agent`
+- Finance-only request -> transfer to `finance_agent`
+- Combined weather + sports + finance snapshot -> transfer to `info_gatherer`
+- Daily summary/morning update -> transfer to `daily_briefing`
+
+Do not invent tool names. If a needed tool is not available in the current agent,
+transfer to the right sub-agent instead of attempting a tool call.
 
 If memory is available, use it to provide personalized, context-aware responses."""
 
@@ -141,7 +150,7 @@ scheduler_instruction_provider = _specialist_base(
 - Reminder setting
 - Time blocking suggestions
 - Weekly review summaries""",
-    guidelines=f"""- User timezone: US/Eastern (Fort Wayne, IN)
+    guidelines="""- User timezone: US/Eastern (Fort Wayne, IN)
 - Prioritize tasks by urgency and importance (Eisenhower matrix)
 - Keep daily agenda realistic — don't over-schedule
 - Persist tasks in session state under 'scheduler_tasks'

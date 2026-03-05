@@ -1,5 +1,4 @@
 """Tests for agent structure and configuration."""
-import pytest
 
 
 def test_root_agent_exists():
@@ -28,6 +27,10 @@ def test_root_agent_has_callbacks():
     assert root_agent.after_agent_callback is not None
     assert root_agent.before_model_callback is not None
     assert root_agent.after_model_callback is not None
+    assert root_agent.on_model_error_callback is not None
+    assert root_agent.before_tool_callback is not None
+    assert root_agent.after_tool_callback is not None
+    assert root_agent.on_tool_error_callback is not None
 
 
 def test_root_agent_uses_instruction_provider():
@@ -65,3 +68,24 @@ def test_info_gatherer_is_parallel():
     from personal_assistant.agent import info_gatherer
     from google.adk.agents import ParallelAgent
     assert isinstance(info_gatherer, ParallelAgent)
+
+
+def test_workflow_subagents_have_runtime_tools():
+    from personal_assistant.agent import (
+        briefing_weather,
+        briefing_news,
+        parallel_weather,
+        parallel_sports,
+        parallel_finance,
+    )
+
+    def fn_names(agent):
+        return {getattr(tool, "__name__", "") for tool in (agent.tools or [])}
+
+    assert "get_current_weather" in fn_names(briefing_weather)
+    assert "get_news_headlines" in fn_names(briefing_news)
+    assert "get_current_weather" in fn_names(parallel_weather)
+    assert "get_nfl_scores" in fn_names(parallel_sports)
+    assert "get_cricket_scores" in fn_names(parallel_sports)
+    assert "get_f1_standings" in fn_names(parallel_sports)
+    assert "get_stock_quote" in fn_names(parallel_finance)

@@ -11,7 +11,6 @@ Usage:
 import asyncio
 import json
 import os
-import sys
 import argparse
 import logging
 import urllib.request
@@ -23,17 +22,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Optionally override these via environment variables in Claude's settings.json
-API_URL = os.environ.get("UM_API_URL", "http://64.227.16.66:8000/api/v1")
+API_URL = os.environ.get("UM_API_URL", "http://127.0.0.1:8082")
 API_KEY = os.environ.get("UM_API_KEY", "")
+CONTAINER_TAG = os.environ.get("UM_CONTAINER_TAG", "default")
+PROFILE_TAG = os.environ.get("UM_PROFILE_TAG", CONTAINER_TAG)
+MCP_HOST = os.environ.get("MCP_HOST", "127.0.0.1")
+MCP_PORT = int(os.environ.get("MCP_PORT", "8081"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [MCP] %(message)s")
 logger = logging.getLogger(__name__)
 
 # ─── API Client Helpers ──────────────────────────────────────────────────────
 
+
+def _validated_api_base() -> str:
+    """Allow only HTTP(S) UnifiedMemory API base URLs."""
+    parsed = urllib.parse.urlparse(API_URL.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError(
+            f"UM_API_URL must be an absolute HTTP(S) URL, got: {API_URL!r}"
+        )
+    return API_URL.rstrip("/")
+
+
+API_BASE = _validated_api_base()
+
 def _make_request(endpoint: str, method: str = "GET", data: Optional[dict] = None) -> dict:
-    """"Helper to make HTTP requests to the UnifiedMemory API."""
-    url = f"{API_URL}/{endpoint.lstrip('/')}"
+    """Helper to make HTTP requests to the UnifiedMemory API."""
+    url = f"{API_BASE}/{endpoint.lstrip('/')}"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -46,7 +62,7 @@ def _make_request(endpoint: str, method: str = "GET", data: Optional[dict] = Non
     req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
     
     try:
-        with urllib.request.urlopen(req) as response:
+        with urllib.request.urlopen(req, timeout=20) as response:  # nosec B310
             body = response.read().decode("utf-8")
             if body:
                 return json.loads(body)
@@ -63,10 +79,8 @@ def _make_request(endpoint: str, method: str = "GET", data: Optional[dict] = Non
 # ─── MCP Server ──────────────────────────────────────────────────────────────
 
 def create_mcp_server():
-    from mcp.server.lowlevel import Server, NotificationOptions
-    from mcp.server.models import InitializationOptions
+    from mcp.server.lowlevel import Server
     import mcp.types as mcp_types
-    from pydantic import Field
 
     app = Server("unified-memory-mcp")
 
@@ -105,6 +119,10 @@ def create_mcp_server():
                         "limit": {
                             "type": "integer",
                             "description": "Max results to return (default: 5)."
+                        },
+                        "container_tag": {
+                            "type": "string",
+                            "description": "Optional category tag override."
                         }
                     },
                     "required": ["query"]
@@ -115,7 +133,12 @@ def create_mcp_server():
                 description="Retrieve the synthesized AI profile of the user based on all their memories.",
                 inputSchema={
                     "type": "object",
-                    "properties": {},
+                    "properties": {
+                        "container_tag": {
+                            "type": "string",
+                            "description": "Optional profile tag override."
+                        }
+                    },
                     "required": []
                 }
             )
@@ -133,7 +156,7 @@ def create_mcp_server():
                     method="POST", 
                     data={
                         "content": arguments["content"],
-                        "container_tag": arguments.get("container_tag", "jeethendra"),
+                        "container_tag": arguments.get("container_tag", CONTAINER_TAG),
                         "auto_extract": True
                     }
                 )
@@ -147,7 +170,7 @@ def create_mcp_server():
                     data={
                         "query": arguments["query"],
                         "limit": limit,
-                        "container_tag": "jeethendra"
+                        "container_tag": arguments.get("container_tag", CONTAINER_TAG),
                     }
                 )
                 
@@ -164,7 +187,8 @@ def create_mcp_server():
                 return [mcp_types.TextContent(type="text", text=final_text)]
                 
             elif name == "um_get_profile":
-                response = _make_request("profile/jeethendra", method="GET")
+                profile_tag = arguments.get("container_tag", PROFILE_TAG)
+                response = _make_request(f"profile/{profile_tag}", method="GET")
                 return [mcp_types.TextContent(type="text", text=json.dumps(response, indent=2))]
                 
             else:
@@ -238,8 +262,8 @@ async def run_sse_server(host: str, port: int):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UnifiedMemory MCP Server")
     parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8081)
+    parser.add_argument("--host", default=MCP_HOST)
+    parser.add_argument("--port", type=int, default=MCP_PORT)
     args = parser.parse_args()
 
     try:

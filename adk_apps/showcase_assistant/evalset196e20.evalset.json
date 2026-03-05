@@ -1,0 +1,16 @@
+{
+  "eval_set_id": "evalset196e20",
+  "name": "evalset196e20",
+  "eval_cases": [
+    {
+      "eval_id": "caseca2f37",
+      "conversation": [],
+      "session_input": {
+        "app_name": "showcase_assistant",
+        "user_id": "user"
+      },
+      "creation_timestamp": 1772733884.122815
+    }
+  ],
+  "creation_timestamp": 1772733879.876747
+}

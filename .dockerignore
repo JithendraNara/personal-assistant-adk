@@ -3,6 +3,7 @@ __pycache__
 .env
 .git
 .venv
+.venv-audit
 *.tar.gz
 sessions.db
 data/uploads/*

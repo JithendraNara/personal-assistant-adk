@@ -6,7 +6,7 @@ ADK FunctionTools when passed to an agent's tools=[...] list.
 """
 
 from . import web_tools, data_tools, career_tools, finance_tools
-from . import sports_tools, scheduler_tools, tech_tools
+from . import sports_tools, scheduler_tools, tech_tools, weather_tools
 
 __all__ = [
     "web_tools",
@@ -16,4 +16,5 @@ __all__ = [
     "sports_tools",
     "scheduler_tools",
     "tech_tools",
+    "weather_tools",
 ]

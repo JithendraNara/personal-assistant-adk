@@ -6,7 +6,6 @@ Includes job search, skill matching, and resume/interview utilities.
 
 import os
 from datetime import datetime, timezone
-from typing import Optional
 
 # REAL API: LinkedIn API, Indeed API, or job board aggregators
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "")

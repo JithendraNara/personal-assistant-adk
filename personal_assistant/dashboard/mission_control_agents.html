@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Control · Agents</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/mission-control/assets/mission_control.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <section class="brand">
+        <span class="brand-kicker">Ops Deck</span>
+        <h1 class="brand-title">Mission Control</h1>
+        <p class="brand-sub">Agent throughput, latency shape, and tool pressure with extra space for triage.</p>
+      </section>
+
+      <nav class="nav">
+        <a href="/mission-control" class="nav-link">Overview</a>
+        <a href="/mission-control/sessions" class="nav-link">Sessions</a>
+        <a href="/mission-control/agents" class="nav-link">Agents</a>
+        <a href="/mission-control/console" class="nav-link">Console</a>
+      </nav>
+
+      <section class="rail-block">
+        <div class="rail-label">Runtime</div>
+        <div class="chip-row" id="runtime-chips"><span class="chip">Loading...</span></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Access Token</div>
+        <input id="api-key" class="token-input" type="password" placeholder="X-API-Key" autocomplete="off" />
+        <div class="row wrap">
+          <button id="save-key" class="btn main">Save Key</button>
+          <button id="clear-key" class="btn subtle">Clear</button>
+        </div>
+        <div id="auth-status" class="status-line"></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Control</div>
+        <div class="row wrap">
+          <button id="refresh-now" class="btn main">Refresh</button>
+          <button id="toggle-live" class="btn subtle">Pause Live</button>
+        </div>
+        <div id="refresh-status" class="status-line">Waiting for snapshot...</div>
+      </section>
+
+      <section class="rail-block mono" style="font-size:12px;color:var(--text-muted);">
+        <div>Selected Session: <span id="selected-session">-</span></div>
+        <div>Route: <span id="active-route">-</span></div>
+      </section>
+    </aside>
+
+    <main class="stage">
+      <header class="head">
+        <div>
+          <h2 class="head-title">Agent Load Center</h2>
+          <div class="head-meta mono">
+            <span>Backend: <span id="meta-backend">-</span></span>
+            <span>Model: <span id="meta-model">-</span></span>
+            <span>Generated: <span id="meta-generated">-</span></span>
+          </div>
+        </div>
+        <div class="row wrap">
+          <button id="open-api-docs" class="btn ghost">API Docs</button>
+          <button id="open-health" class="btn ghost">Health</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <section class="grid-2">
+          <article class="panel" style="min-height:330px;">
+            <div class="row" style="justify-content:space-between;">
+              <h3 class="panel-title">Throughput Ranking</h3>
+              <span class="mono" style="font-size:11px;color:var(--text-dim);">turns handled</span>
+            </div>
+            <div class="bar-list" id="agent-bars"></div>
+          </article>
+
+          <article class="panel" style="min-height:330px;">
+            <div class="row" style="justify-content:space-between;">
+              <h3 class="panel-title">Runtime Agent Manifest</h3>
+              <span class="mono" style="font-size:11px;color:var(--text-dim);">from root_agent.sub_agents</span>
+            </div>
+            <div id="manifest-list" class="detail"></div>
+          </article>
+        </section>
+
+        <article class="panel" style="min-height:340px;">
+          <div class="row" style="justify-content:space-between;">
+            <h3 class="panel-title">Agent Metrics Table</h3>
+            <span class="mono" style="font-size:11px;color:var(--text-dim);">turns, tools, errors, latency</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Turns</th>
+                  <th>Tool Calls</th>
+                  <th>Errors</th>
+                  <th>Error %</th>
+                  <th>Avg Latency</th>
+                  <th>Last Seen</th>
+                </tr>
+              </thead>
+              <tbody id="agents-body"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/mission-control/assets/mission_control_shared.js"></script>
+  <script>
+    function renderAgents(snapshot, api) {
+      const agents = snapshot.agents || [];
+      const runtime = snapshot.runtime || {};
+
+      const maxTurns = Math.max(...agents.map((item) => item.turns || 0), 1);
+      const barsEl = document.getElementById("agent-bars");
+      if (!agents.length) {
+        barsEl.innerHTML = `<div class="empty">No agent traffic yet.</div>`;
+      } else {
+        barsEl.innerHTML = agents.slice(0, 14).map((agent) => {
+          const turns = agent.turns || 0;
+          const width = Math.max(6, Math.round((turns / maxTurns) * 100));
+          return `
+            <article class="bar-row">
+              <div class="bar-meta">
+                <span>${api.escapeHtml(agent.name)}</span>
+                <span class="mono">${api.escapeHtml(String(turns))} turns</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+            </article>
+          `;
+        }).join("");
+      }
+
+      const body = document.getElementById("agents-body");
+      if (!agents.length) {
+        body.innerHTML = `<tr><td colspan="7" class="empty">No metrics yet.</td></tr>`;
+      } else {
+        body.innerHTML = agents.map((agent) => {
+          const turns = agent.turns || 0;
+          const errors = agent.errors || 0;
+          const errorPct = turns > 0 ? ((errors / turns) * 100).toFixed(2) : "0.00";
+          return `
+            <tr>
+              <td>${api.escapeHtml(agent.name)}</td>
+              <td>${api.escapeHtml(String(turns))}</td>
+              <td>${api.escapeHtml(String(agent.tool_calls || 0))}</td>
+              <td>${api.escapeHtml(String(errors))}</td>
+              <td class="mono">${api.escapeHtml(errorPct)}%</td>
+              <td class="mono">${api.escapeHtml(String(agent.avg_latency_ms || 0))}ms</td>
+              <td class="mono">${api.escapeHtml(api.prettyTime(agent.last_seen_at))}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      const manifest = runtime.agents || [];
+      const manifestEl = document.getElementById("manifest-list");
+      if (!manifest.length) {
+        manifestEl.innerHTML = `<div class="empty">No sub-agents discovered.</div>`;
+      } else {
+        manifestEl.innerHTML = manifest.map((name) => `<div style="padding:6px 0;border-bottom:1px solid rgba(128,159,205,0.14);">${api.escapeHtml(name)}</div>`).join("");
+      }
+    }
+
+    MissionControlShared.boot({ onSnapshot: renderAgents, refreshMs: 3000 });
+  </script>
+</body>
+</html>

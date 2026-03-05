@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Control · Overview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/mission-control/assets/mission_control.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <section class="brand">
+        <span class="brand-kicker">Ops Deck</span>
+        <h1 class="brand-title">Mission Control</h1>
+        <p class="brand-sub">Expanded control plane for your ADK runtime, with dedicated pages for each operator flow.</p>
+      </section>
+
+      <nav class="nav">
+        <a href="/mission-control" class="nav-link">Overview</a>
+        <a href="/mission-control/sessions" class="nav-link">Sessions</a>
+        <a href="/mission-control/agents" class="nav-link">Agents</a>
+        <a href="/mission-control/console" class="nav-link">Console</a>
+      </nav>
+
+      <section class="rail-block">
+        <div class="rail-label">Runtime</div>
+        <div class="chip-row" id="runtime-chips"><span class="chip">Loading...</span></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Access Token</div>
+        <input id="api-key" class="token-input" type="password" placeholder="X-API-Key" autocomplete="off" />
+        <div class="row wrap">
+          <button id="save-key" class="btn main">Save Key</button>
+          <button id="clear-key" class="btn subtle">Clear</button>
+        </div>
+        <div id="auth-status" class="status-line"></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Control</div>
+        <div class="row wrap">
+          <button id="refresh-now" class="btn main">Refresh</button>
+          <button id="toggle-live" class="btn subtle">Pause Live</button>
+        </div>
+        <div id="refresh-status" class="status-line">Waiting for snapshot...</div>
+      </section>
+
+      <section class="rail-block mono" style="font-size:12px;color:var(--text-muted);">
+        <div>Selected Session: <span id="selected-session">-</span></div>
+        <div>Route: <span id="active-route">-</span></div>
+      </section>
+    </aside>
+
+    <main class="stage">
+      <header class="head">
+        <div>
+          <h2 class="head-title">Runtime Overview</h2>
+          <div class="head-meta mono">
+            <span>Backend: <span id="meta-backend">-</span></span>
+            <span>Model: <span id="meta-model">-</span></span>
+            <span>Generated: <span id="meta-generated">-</span></span>
+          </div>
+        </div>
+        <div class="row wrap">
+          <button id="open-api-docs" class="btn ghost">API Docs</button>
+          <button id="open-health" class="btn ghost">Health</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <section class="kpi-grid">
+          <article class="kpi"><div class="kpi-label">Total Turns</div><div id="kpi-turns" class="kpi-value">0</div><div class="kpi-foot mono">processed turns</div></article>
+          <article class="kpi"><div class="kpi-label">Active Sessions</div><div id="kpi-active" class="kpi-value">0</div><div class="kpi-foot mono">last 3 min</div></article>
+          <article class="kpi"><div class="kpi-label">Tracked Sessions</div><div id="kpi-sessions" class="kpi-value">0</div><div class="kpi-foot mono">telemetry buffer</div></article>
+          <article class="kpi"><div class="kpi-label">Avg Latency</div><div id="kpi-latency" class="kpi-value">0ms</div><div class="kpi-foot mono">per turn</div></article>
+          <article class="kpi"><div class="kpi-label">Error Rate</div><div id="kpi-error-rate" class="kpi-value">0%</div><div class="kpi-foot mono">runtime failures</div></article>
+          <article class="kpi"><div class="kpi-label">Total Errors</div><div id="kpi-error-count" class="kpi-value">0</div><div class="kpi-foot mono">since startup</div></article>
+        </section>
+
+        <section class="grid-2 wide-left" style="min-height:0;">
+          <article class="panel">
+            <div class="row" style="justify-content:space-between;">
+              <h3 class="panel-title">Live Event Rail</h3>
+              <span class="mono" style="font-size:11px;color:var(--text-dim);">newest first</span>
+            </div>
+            <div id="events-list" class="events"></div>
+          </article>
+
+          <article class="panel">
+            <div class="row" style="justify-content:space-between;">
+              <h3 class="panel-title">Recent Sessions</h3>
+              <a href="/mission-control/sessions" class="btn subtle small" style="text-decoration:none;">Open Sessions Page</a>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Session</th>
+                    <th>User</th>
+                    <th>Status</th>
+                    <th>Route</th>
+                    <th>Turns</th>
+                  </tr>
+                </thead>
+                <tbody id="sessions-preview"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="/mission-control/assets/mission_control_shared.js"></script>
+  <script>
+    function renderOverview(snapshot, api) {
+      const overview = snapshot.overview || {};
+      document.getElementById("kpi-turns").textContent = String(overview.total_turns || 0);
+      document.getElementById("kpi-active").textContent = String(overview.active_sessions || 0);
+      document.getElementById("kpi-sessions").textContent = String(overview.tracked_sessions || 0);
+      document.getElementById("kpi-latency").textContent = `${overview.avg_latency_ms || 0}ms`;
+      document.getElementById("kpi-error-rate").textContent = `${overview.error_rate || 0}%`;
+      document.getElementById("kpi-error-count").textContent = String(overview.total_errors || 0);
+
+      const events = snapshot.events || [];
+      const eventsEl = document.getElementById("events-list");
+      if (!events.length) {
+        eventsEl.innerHTML = `<div class="empty">No events yet.</div>`;
+      } else {
+        eventsEl.innerHTML = events.slice(0, 100).map((event) => `
+          <article class="event ${api.escapeHtml(event.event || "turn")}">
+            <div class="event-head mono">
+              <span>${api.escapeHtml(event.event || "turn")} · ${api.escapeHtml(event.agent || "-")}</span>
+              <span>${api.escapeHtml(api.prettyTime(event.timestamp))}</span>
+            </div>
+            <div class="event-msg">${api.escapeHtml(api.truncate(event.message || "", 200))}</div>
+            <div class="mono" style="font-size:11px;color:var(--text-dim);">${api.escapeHtml(event.session_id || "-")}</div>
+          </article>
+        `).join("");
+      }
+
+      const sessions = snapshot.sessions || [];
+      const previewEl = document.getElementById("sessions-preview");
+      if (!sessions.length) {
+        previewEl.innerHTML = `<tr><td colspan="5" class="empty">No tracked sessions yet.</td></tr>`;
+      } else {
+        previewEl.innerHTML = sessions.slice(0, 14).map((row) => `
+          <tr>
+            <td class="mono">${api.escapeHtml(api.truncate(row.session_id || "-", 22))}</td>
+            <td>${api.escapeHtml(row.user_id || "-")}</td>
+            <td><span class="pill ${api.escapeHtml(row.status || "cold")}">${api.escapeHtml(row.status || "cold")}</span></td>
+            <td title="${api.escapeHtml(row.last_route || "-")}">${api.escapeHtml(api.truncate(row.last_route || "-", 20))}</td>
+            <td>${api.escapeHtml(String(row.turns || 0))}</td>
+          </tr>
+        `).join("");
+      }
+    }
+
+    MissionControlShared.boot({ onSnapshot: renderOverview, refreshMs: 2500 });
+  </script>
+</body>
+</html>

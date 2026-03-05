@@ -23,7 +23,6 @@ from typing import Optional
 
 from personal_assistant.memory.models import (
     Memory, MemoryType, UserProfile, SearchResult,
-    MemoryRelationship, RelationshipType,
 )
 from personal_assistant.memory.store import MemoryStore
 from personal_assistant.memory.embeddings import (

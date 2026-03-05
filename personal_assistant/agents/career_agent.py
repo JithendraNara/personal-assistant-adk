@@ -6,7 +6,8 @@ from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 
 from ..shared.config import DEFAULT_MODEL
 from ..shared.prompts import career_instruction_provider
-from ..shared.callbacks import before_tool_callback, after_tool_callback
+from ..shared.callbacks import before_tool_callback, after_tool_callback, on_tool_error_callback
+from ..shared.skills import build_skill_toolsets
 from ..tools.career_tools import search_jobs, analyze_skill_gaps, get_salary_benchmark
 
 career_agent = LlmAgent(
@@ -25,8 +26,10 @@ career_agent = LlmAgent(
         get_salary_benchmark,
         load_memory,
         PreloadMemoryTool(),
+        *build_skill_toolsets("career_agent"),
     ],
     output_key="career_last_search",
     before_tool_callback=before_tool_callback,
     after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )

@@ -3,8 +3,6 @@ Technology and software engineering tools for the tech_agent.
 
 Covers code analysis, debugging, tech recommendations, and streaming setup.
 """
-
-import os
 import re
 from typing import Optional
 
@@ -52,21 +50,21 @@ def analyze_code(
                 "type": "bug",
                 "severity": "medium",
                 "message": "Bare `except:` clause catches all exceptions including SystemExit. Use `except Exception:` or a specific exception type.",
-                "line": next((i + 1 for i, l in enumerate(lines) if "except:" in l), None),
+                "line": next((i + 1 for i, line in enumerate(lines) if "except:" in line), None),
             })
         if "print(" in code and line_count > 20:
             static_findings.append({
                 "type": "style",
                 "severity": "low",
                 "message": "Found print() statements — consider using logging module for production code.",
-                "line": next((i + 1 for i, l in enumerate(lines) if "print(" in l), None),
+                "line": next((i + 1 for i, line in enumerate(lines) if "print(" in line), None),
             })
         if "import *" in code:
             static_findings.append({
                 "type": "style",
                 "severity": "medium",
                 "message": "Wildcard imports (`import *`) pollute the namespace. Import explicitly.",
-                "line": next((i + 1 for i, l in enumerate(lines) if "import *" in l), None),
+                "line": next((i + 1 for i, line in enumerate(lines) if "import *" in line), None),
             })
         if re.search(r"password\s*=\s*['\"][^'\"]+['\"]", code, re.IGNORECASE):
             static_findings.append({
@@ -75,7 +73,7 @@ def analyze_code(
                 "message": "Hardcoded password detected. Use environment variables or a secrets manager.",
                 "line": None,
             })
-        if not any("def " in l for l in lines) and line_count > 30:
+        if not any("def " in line for line in lines) and line_count > 30:
             static_findings.append({
                 "type": "readability",
                 "severity": "low",
@@ -88,7 +86,7 @@ def analyze_code(
                 "type": "style",
                 "severity": "low",
                 "message": "Use `const` or `let` instead of `var` in modern JS/TS.",
-                "line": next((i + 1 for i, l in enumerate(lines) if "var " in l), None),
+                "line": next((i + 1 for i, line in enumerate(lines) if "var " in line), None),
             })
         if "console.log(" in code and line_count > 15:
             static_findings.append({

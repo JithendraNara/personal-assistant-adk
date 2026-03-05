@@ -5,8 +5,7 @@ Covers budgeting, investment analysis, deal-finding, and expense tracking.
 """
 
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import datetime, timezone
 
 # REAL API keys
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "")
@@ -87,6 +86,10 @@ def calculate_budget(
         "50_30_20_analysis": {
             "needs": {"amount": needs_total, "pct": round(needs_pct, 1), "target_pct": 50},
             "wants": {"amount": wants_total, "pct": round(wants_pct, 1), "target_pct": 30},
+            "other": {
+                "amount": round(other_total, 2),
+                "pct": round((other_total / monthly_income) * 100, 1),
+            },
             "savings_actual": {"amount": savings, "pct": round(savings_pct, 1), "target_pct": 20},
         },
         "flags": flags,

@@ -4,8 +4,6 @@ Data analysis tools for the data_agent.
 Supports CSV profiling, SQL query generation, and data summarization.
 """
 
-import io
-import json
 import os
 from typing import Optional
 

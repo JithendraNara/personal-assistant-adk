@@ -12,9 +12,8 @@ References:
 """
 
 import os
-import json
 import logging
-from datetime import datetime, timezone
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +37,17 @@ def build_agent_card(
     Returns:
         A2A AgentCard as a dict.
     """
+    from personal_assistant.shared.security import is_auth_required
+
+    auth_block: dict
+    if is_auth_required():
+        auth_block = {
+            "schemes": ["apiKey"],
+            "apiKey": {"name": "X-API-Key", "in": "header"},
+        }
+    else:
+        auth_block = {"schemes": ["none"]}
+
     return {
         "name": "Personal Assistant",
         "description": (
@@ -58,9 +68,7 @@ def build_agent_card(
             "pushNotifications": False,
             "stateTransitionHistory": True,
         },
-        "authentication": {
-            "schemes": ["none"],  # TODO: Add API key auth for production
-        },
+        "authentication": auth_block,
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],
         "skills": _build_skill_definitions(),
@@ -150,7 +158,13 @@ def _build_skill_definitions() -> list[dict]:
 
 # ─── FastAPI Integration ─────────────────────────────────────────────────────
 
-def register_a2a_routes(app, runner, session_service, APP_NAME: str):
+def register_a2a_routes(
+    app,
+    runner,
+    session_service,
+    APP_NAME: str,
+    auth_validator: Callable[[str | None], tuple[bool, str]] | None = None,
+):
     """
     Register A2A protocol routes on an existing FastAPI app.
 
@@ -162,9 +176,11 @@ def register_a2a_routes(app, runner, session_service, APP_NAME: str):
         session_service: The session service.
         APP_NAME: Application name for session scoping.
     """
+    from fastapi import Request
     from fastapi.responses import JSONResponse
     from uuid import uuid4
     from google.genai import types as genai_types
+    from personal_assistant.shared.security import resolve_api_key
 
     base_url = os.getenv("A2A_BASE_URL", "http://localhost:8080")
     agent_card = build_agent_card(base_url=base_url)
@@ -175,7 +191,7 @@ def register_a2a_routes(app, runner, session_service, APP_NAME: str):
         return JSONResponse(content=agent_card)
 
     @app.post("/a2a")
-    async def a2a_endpoint(request_body: dict):
+    async def a2a_endpoint(request: Request, request_body: dict):
         """
         A2A protocol endpoint — receives tasks from other agents.
 
@@ -184,7 +200,23 @@ def register_a2a_routes(app, runner, session_service, APP_NAME: str):
           2. Route through ADK agent
           3. Return result
         """
-        method = request_body.get("method", "")
+        if auth_validator:
+            api_key = resolve_api_key(
+                x_api_key=request.headers.get("x-api-key"),
+                authorization_header=request.headers.get("authorization"),
+                query_api_key=request.query_params.get("api_key"),
+            )
+            allowed, reason = auth_validator(api_key)
+            if not allowed:
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "jsonrpc": "2.0",
+                        "id": request_body.get("id"),
+                        "error": {"code": -32600, "message": f"Unauthorized: {reason}"},
+                    },
+                )
+
         task_id = request_body.get("params", {}).get("id", str(uuid4()))
         message_text = ""
 

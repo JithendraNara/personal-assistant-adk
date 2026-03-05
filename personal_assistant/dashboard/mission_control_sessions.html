@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Control · Sessions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/mission-control/assets/mission_control.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <section class="brand">
+        <span class="brand-kicker">Ops Deck</span>
+        <h1 class="brand-title">Mission Control</h1>
+        <p class="brand-sub">Session-level debugging with full-width tables and dedicated inspector space.</p>
+      </section>
+
+      <nav class="nav">
+        <a href="/mission-control" class="nav-link">Overview</a>
+        <a href="/mission-control/sessions" class="nav-link">Sessions</a>
+        <a href="/mission-control/agents" class="nav-link">Agents</a>
+        <a href="/mission-control/console" class="nav-link">Console</a>
+      </nav>
+
+      <section class="rail-block">
+        <div class="rail-label">Runtime</div>
+        <div class="chip-row" id="runtime-chips"><span class="chip">Loading...</span></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Access Token</div>
+        <input id="api-key" class="token-input" type="password" placeholder="X-API-Key" autocomplete="off" />
+        <div class="row wrap">
+          <button id="save-key" class="btn main">Save Key</button>
+          <button id="clear-key" class="btn subtle">Clear</button>
+        </div>
+        <div id="auth-status" class="status-line"></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Control</div>
+        <div class="row wrap">
+          <button id="refresh-now" class="btn main">Refresh</button>
+          <button id="toggle-live" class="btn subtle">Pause Live</button>
+        </div>
+        <div id="refresh-status" class="status-line">Waiting for snapshot...</div>
+      </section>
+
+      <section class="rail-block mono" style="font-size:12px;color:var(--text-muted);">
+        <div>Selected Session: <span id="selected-session">-</span></div>
+        <div>Route: <span id="active-route">-</span></div>
+      </section>
+    </aside>
+
+    <main class="stage">
+      <header class="head">
+        <div>
+          <h2 class="head-title">Session Control Room</h2>
+          <div class="head-meta mono">
+            <span>Backend: <span id="meta-backend">-</span></span>
+            <span>Model: <span id="meta-model">-</span></span>
+            <span>Generated: <span id="meta-generated">-</span></span>
+          </div>
+        </div>
+        <div class="row wrap">
+          <button id="open-api-docs" class="btn ghost">API Docs</button>
+          <button id="open-health" class="btn ghost">Health</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <article class="panel" style="min-height: 360px;">
+          <div class="row" style="justify-content:space-between;">
+            <h3 class="panel-title">Session Grid</h3>
+            <div class="search-row" style="width:380px;max-width:100%;">
+              <input id="session-search" class="text-input" type="search" placeholder="Search session/user/route/message" />
+              <button id="clear-search" class="btn subtle small">Clear</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>User</th>
+                  <th>Status</th>
+                  <th>Turns</th>
+                  <th>Tools</th>
+                  <th>Route</th>
+                  <th>Latency</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="sessions-body"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel" style="min-height: 300px;">
+          <div class="row" style="justify-content:space-between;">
+            <h3 class="panel-title">Session Inspector</h3>
+            <span id="inspector-meta" class="mono" style="font-size:11px;color:var(--text-dim);">Select a row to inspect.</span>
+          </div>
+          <div id="session-detail" class="detail">Waiting for session selection...</div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/mission-control/assets/mission_control_shared.js"></script>
+  <script>
+    const localState = {
+      sessions: [],
+      selectedSessionId: null,
+    };
+
+    function filteredSessions() {
+      const needle = (document.getElementById("session-search").value || "").trim().toLowerCase();
+      if (!needle) return localState.sessions;
+      return localState.sessions.filter((row) => {
+        const hay = `${row.session_id} ${row.user_id} ${row.last_route} ${row.last_message}`.toLowerCase();
+        return hay.includes(needle);
+      });
+    }
+
+    function renderSessionsTable(api) {
+      const rows = filteredSessions();
+      const body = document.getElementById("sessions-body");
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="8" class="empty">No sessions match current filter.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => `
+        <tr>
+          <td class="mono">${api.escapeHtml(api.truncate(row.session_id || "-", 26))}</td>
+          <td>${api.escapeHtml(row.user_id || "-")}</td>
+          <td><span class="pill ${api.escapeHtml(row.status || "cold")}">${api.escapeHtml(row.status || "cold")}</span></td>
+          <td>${api.escapeHtml(String(row.turns || 0))}</td>
+          <td>${api.escapeHtml(String(row.tool_calls || 0))}</td>
+          <td title="${api.escapeHtml(row.last_route || "-")}">${api.escapeHtml(api.truncate(row.last_route || "-", 32))}</td>
+          <td class="mono">${api.escapeHtml(String(row.last_duration_ms || 0))}ms</td>
+          <td><button class="btn subtle small inspect-btn" data-session="${api.escapeHtml(row.session_id)}">Inspect</button></td>
+        </tr>
+      `).join("");
+
+      body.querySelectorAll(".inspect-btn").forEach((button) => {
+        button.addEventListener("click", () => loadSession(button.dataset.session, api));
+      });
+    }
+
+    async function loadSession(sessionId, api) {
+      if (!sessionId) return;
+      localState.selectedSessionId = sessionId;
+      api.setSelectedSession(sessionId);
+
+      try {
+        const detail = await api.loadSessionDetail(sessionId);
+        const session = detail.session || {};
+        api.setSelectedSession(sessionId, session.last_route || "-");
+        document.getElementById("inspector-meta").textContent = `turns=${session.turns || 0} · tools=${session.tool_calls || 0} · last=${api.prettyTime(session.last_event_at)}`;
+
+        const keys = (detail.state_keys || []).slice(0, 80).map((key) => `<code>${api.escapeHtml(key)}</code>`).join(", ");
+        const tools = (detail.recent_tool_calls || []).slice(-15).map((call) => `<li><span class="mono">${api.escapeHtml(call.timestamp || "-")}</span> - ${api.escapeHtml(call.agent || "unknown")}: <strong>${api.escapeHtml(call.tool || "unknown")}</strong></li>`).join("");
+        const events = (detail.events || []).slice(0, 12).map((evt) => `<li><span class="mono">${api.escapeHtml(api.prettyTime(evt.timestamp))}</span> - ${api.escapeHtml(evt.event || "turn")}: ${api.escapeHtml(api.truncate(evt.message || "", 130))}</li>`).join("");
+
+        document.getElementById("session-detail").innerHTML = `
+          <div class="mono" style="margin-bottom:9px;color:var(--text);">${api.escapeHtml(session.session_id || "-")} · user=${api.escapeHtml(session.user_id || "-")} · status=${api.escapeHtml(session.status || "-")}</div>
+          <div style="margin-bottom:10px;"><strong>State Keys (${detail.state_key_count || 0})</strong><br />${keys || "-"}</div>
+          <div style="margin-bottom:10px;"><strong>Recent Tool Calls</strong><ul style="margin-top:6px;padding-left:18px;">${tools || "<li>none</li>"}</ul></div>
+          <div><strong>Recent Events</strong><ul style="margin-top:6px;padding-left:18px;">${events || "<li>none</li>"}</ul></div>
+        `;
+      } catch (error) {
+        document.getElementById("session-detail").textContent = `Failed to load session: ${error.message}`;
+      }
+    }
+
+    function onSnapshot(snapshot, api) {
+      localState.sessions = snapshot.sessions || [];
+      renderSessionsTable(api);
+
+      if (localState.selectedSessionId) {
+        const stillPresent = localState.sessions.some((row) => row.session_id === localState.selectedSessionId);
+        if (stillPresent) {
+          loadSession(localState.selectedSessionId, api);
+        }
+      }
+    }
+
+    document.getElementById("session-search").addEventListener("input", () => {
+      const api = MissionControlShared.api;
+      renderSessionsTable(api);
+    });
+
+    document.getElementById("clear-search").addEventListener("click", () => {
+      document.getElementById("session-search").value = "";
+      renderSessionsTable(MissionControlShared.api);
+    });
+
+    MissionControlShared.boot({ onSnapshot, refreshMs: 2500 });
+  </script>
+</body>
+</html>

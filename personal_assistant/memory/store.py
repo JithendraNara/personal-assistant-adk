@@ -17,10 +17,9 @@ import struct
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from pathlib import Path
 
 from personal_assistant.memory.models import (
-    Memory, MemoryType, UserProfile, MemoryRelationship, RelationshipType,
+    Memory, MemoryType, UserProfile,
 )
 
 logger = logging.getLogger(__name__)

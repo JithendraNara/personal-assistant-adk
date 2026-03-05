@@ -1,7 +1,6 @@
 """Tests for the callback system."""
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 
 class MockState(dict):
@@ -65,6 +64,15 @@ async def test_before_agent_increments_count():
 
 
 @pytest.mark.asyncio
+async def test_before_agent_accepts_callback_context_keyword():
+    from personal_assistant.shared.callbacks import before_agent_callback
+    ctx = MockContext(state={})
+    result = await before_agent_callback(callback_context=ctx)
+    assert result is None
+    assert ctx.state.get("_interaction_count") == 1
+
+
+@pytest.mark.asyncio
 async def test_before_model_blocks_credentials():
     from personal_assistant.shared.callbacks import before_model_callback
     ctx = MockCallbackContext()
@@ -97,6 +105,20 @@ async def test_after_agent_tracks_agents_used():
 
 
 @pytest.mark.asyncio
+async def test_after_agent_accepts_callback_context_keyword():
+    from personal_assistant.shared.callbacks import after_agent_callback
+    import time
+
+    ctx = MockContext(
+        agent_name="research_agent",
+        state={"temp:turn_start_time": time.time(), "_interaction_count": 1},
+    )
+    result = await after_agent_callback(callback_context=ctx)
+    assert result is None
+    assert "research_agent" in ctx.state.get("user:agents_used", [])
+
+
+@pytest.mark.asyncio
 async def test_before_tool_logs_usage():
     from personal_assistant.shared.callbacks import before_tool_callback
     tool = MockBaseTool(name="web_search")
@@ -116,3 +138,26 @@ async def test_after_tool_enriches_errors():
     result = await after_tool_callback(tool, {}, tool_ctx, error_result)
     assert result is None  # Should use result as-is
     assert "_suggestion" in error_result  # Error should be enriched
+
+
+@pytest.mark.asyncio
+async def test_on_model_error_returns_fallback_response():
+    from personal_assistant.shared.callbacks import on_model_error_callback
+
+    ctx = MockCallbackContext(agent_name="research_agent")
+    request = MockLlmRequest(text="test")
+    result = await on_model_error_callback(ctx, request, RuntimeError("upstream timeout"))
+    assert result is not None
+    assert "model error" in result.content.parts[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_on_tool_error_returns_structured_error_payload():
+    from personal_assistant.shared.callbacks import on_tool_error_callback
+
+    tool = MockBaseTool(name="web_search")
+    tool_ctx = MockToolContext(agent_name="research_agent")
+    result = await on_tool_error_callback(tool, {"query": "x"}, tool_ctx, RuntimeError("boom"))
+    assert isinstance(result, dict)
+    assert "error" in result
+    assert "_suggestion" in result

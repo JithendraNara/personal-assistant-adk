@@ -27,7 +27,15 @@ from .shared.prompts import root_instruction_provider
 from .shared.callbacks import (
     before_agent_callback, after_agent_callback,
     before_model_callback, after_model_callback,
+    before_tool_callback, after_tool_callback,
+    on_model_error_callback, on_tool_error_callback,
 )
+from .shared.toolsets import build_optional_toolsets
+from .shared.skills import build_skill_toolsets
+from .tools.weather_tools import get_current_weather
+from .tools.web_tools import get_news_headlines
+from .tools.sports_tools import get_nfl_scores, get_f1_standings, get_cricket_scores
+from .tools.finance_tools import get_stock_quote
 
 # Import all specialist agents
 from .agents.research_agent import research_agent
@@ -45,9 +53,16 @@ from .agents.tech_agent import tech_agent
 briefing_weather = LlmAgent(
     name="briefing_weather",
     model=DEFAULT_MODEL,
-    instruction="Fetch today's weather for Fort Wayne, IN. Be brief — just temperature, conditions, and any alerts.",
+    instruction=(
+        "Use get_current_weather for Fort Wayne, IN and return a concise weather update "
+        "(temperature, feels-like, condition, alerts if present)."
+    ),
+    tools=[get_current_weather],
     output_key="briefing_weather",
     description="Fetches weather for daily briefing.",
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 
 briefing_tasks = LlmAgent(
@@ -61,9 +76,16 @@ briefing_tasks = LlmAgent(
 briefing_news = LlmAgent(
     name="briefing_news",
     model=DEFAULT_MODEL,
-    instruction="Provide 3-5 brief headlines relevant to the user: tech news, Dallas Cowboys updates, India cricket, and F1 news.",
+    instruction=(
+        "Use get_news_headlines to fetch 3-5 concise headlines relevant to the user: "
+        "tech news, Dallas Cowboys updates, India cricket, and F1 news."
+    ),
+    tools=[get_news_headlines],
     output_key="briefing_news",
     description="Fetches relevant news headlines for daily briefing.",
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 
 briefing_composer = LlmAgent(
@@ -92,25 +114,43 @@ daily_briefing = SequentialAgent(
 parallel_weather = LlmAgent(
     name="parallel_weather",
     model=DEFAULT_MODEL,
-    instruction="Get current weather for Fort Wayne, IN.",
+    instruction="Use get_current_weather to fetch current weather for Fort Wayne, IN.",
+    tools=[get_current_weather],
     output_key="gathered_weather",
     description="Parallel weather fetch.",
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 
 parallel_sports = LlmAgent(
     name="parallel_sports",
     model=DEFAULT_MODEL,
-    instruction="Get latest scores for Dallas Cowboys (NFL), India cricket, and F1 standings.",
+    instruction=(
+        "Use sports tools to fetch a compact update: get_nfl_scores for Dallas Cowboys, "
+        "get_cricket_scores for India, and get_f1_standings."
+    ),
+    tools=[get_nfl_scores, get_cricket_scores, get_f1_standings],
     output_key="gathered_sports",
     description="Parallel sports fetch.",
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 
 parallel_finance = LlmAgent(
     name="parallel_finance",
     model=DEFAULT_MODEL,
-    instruction="Get major market indices (S&P 500, NASDAQ) and any notable market news.",
+    instruction=(
+        "Use get_stock_quote for SPY and QQQ as proxies for S&P 500 and NASDAQ, "
+        "then summarize notable movement."
+    ),
+    tools=[get_stock_quote],
     output_key="gathered_finance",
     description="Parallel finance fetch.",
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )
 
 info_gatherer = ParallelAgent(
@@ -148,10 +188,16 @@ root_agent = LlmAgent(
     tools=[
         load_memory,
         PreloadMemoryTool(),
+        *build_skill_toolsets("personal_assistant"),
+        *build_optional_toolsets("personal_assistant"),
     ],
     # ─── Callbacks (OpenClaw-inspired middleware pipeline) ─────────────────────────────────
     before_agent_callback=before_agent_callback,
     after_agent_callback=after_agent_callback,
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,
+    on_model_error_callback=on_model_error_callback,
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )

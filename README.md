@@ -15,7 +15,9 @@ A production-grade personal AI assistant built on [Google ADK](https://google.gi
 - [API Server](#api-server)
 - [Deployment](#deployment)
 - [Configuration Reference](#configuration-reference)
+- [ADK Skills](#adk-skills)
 - [MCP Integration](#mcp-integration)
+- [ADK Integrations](#adk-integrations)
 - [Testing](#testing)
 
 ---
@@ -50,6 +52,7 @@ root_agent  (LlmAgent — Coordinator)
 - **Single root coordinator**: All requests enter through `root_agent`, which uses ADK's built-in agent routing to select the right specialist.
 - **Shared session state**: All agents read/write to the same session state, scoped by prefix (`user:`, `app:`, `temp:`).
 - **OpenClaw-inspired callbacks**: A six-stage middleware pipeline (`before_agent`, `after_agent`, `before_model`, `after_model`, `before_tool`, `after_tool`) handles identity injection, guardrails, metrics, and memory archival.
+- **ADK App runtime**: Runner is wired through `App(...)` to enable plugins, resumability, and optional context/runtime optimizations.
 - **Workspace identity files**: Persona, user profile, and agent instructions are loaded from `workspace/*.md` files at session start, making them easy to edit without changing code.
 - **Pluggable services**: Session, memory, and artifact services are swapped via environment variables — no code changes needed to go from in-memory dev to Vertex AI production.
 
@@ -105,7 +108,7 @@ personal-assistant-adk/
 ### Prerequisites
 
 - Python 3.11+
-- A [Google AI Studio](https://aistudio.google.com/) or Google Cloud API key with Gemini access
+- At least one LLM provider key (Gemini, OpenAI, Anthropic, or MiniMax)
 
 ### 1. Install
 
@@ -131,6 +134,14 @@ Open `.env` and set at minimum:
 
 ```env
 GOOGLE_API_KEY=your_key_here
+```
+
+For MiniMax Coding Plan via Anthropic-compatible API:
+
+```env
+ANTHROPIC_API_KEY=your_key_here
+ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic
+DEFAULT_MODEL=anthropic/MiniMax-M2.5
 ```
 
 All other keys are optional — agents fall back to mock data when external APIs are not configured.
@@ -414,6 +425,23 @@ uvicorn serve:app --host 0.0.0.0 --port 8080 --workers 4
 
 ### Endpoints
 
+#### `GET /mission-control`
+Opens the custom mission-control dashboard with multiple pages:
+- `/mission-control` (overview)
+- `/mission-control/sessions`
+- `/mission-control/agents`
+- `/mission-control/console`
+
+#### `GET /api/mission-control/snapshot`
+Returns telemetry aggregates used by the dashboard:
+- KPI overview (turns, active sessions, latency, error rate)
+- Session grid
+- Agent load board
+- Recent turn/tool/error events
+- Runtime metadata (services, model, plugins)
+
+Requires API auth when `REQUIRE_AUTH=true`.
+
 #### `GET /health`
 Returns server status and service types.
 
@@ -497,7 +525,7 @@ When running in development mode, visit:
 python run.py
 
 # API server
-uvicorn serve:app --reload --port 8080
+uvicorn serve:app --host 127.0.0.1 --reload --port 8080
 
 # ADK Dev UI
 adk web personal_assistant
@@ -515,6 +543,7 @@ docker build -t personal-assistant .
 docker run -p 8080:8080 \
   -e GOOGLE_API_KEY=your_key \
   -e ENVIRONMENT=production \
+  -e APP_API_KEY=replace_with_long_random_token \
   personal-assistant
 ```
 
@@ -523,6 +552,7 @@ docker run -p 8080:8080 \
 docker run -p 8080:8080 \
   -e GOOGLE_API_KEY=your_key \
   -e ENVIRONMENT=production \
+  -e APP_API_KEY=replace_with_long_random_token \
   -e SESSION_DB_URL=sqlite:///data/sessions.db \
   -v $(pwd)/data:/app/data \
   personal-assistant
@@ -635,7 +665,10 @@ All configuration is via environment variables. Copy `.env.example` to `.env` to
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GOOGLE_API_KEY` | **Yes** | — | Gemini API key from Google AI Studio or GCP |
+| `GOOGLE_API_KEY` | No* | — | Gemini API key from Google AI Studio or GCP |
+| `OPENAI_API_KEY` | No* | — | OpenAI API key (used when `DEFAULT_MODEL` starts with `openai/`). |
+| `ANTHROPIC_API_KEY` | No* | — | Anthropic API key (also used for Anthropic-compatible providers like MiniMax Coding Plan). |
+| `MINIMAX_API_KEY` | No* | — | MiniMax native API key (used when `DEFAULT_MODEL` starts with `minimax/`). |
 | `SERPAPI_KEY` | No | — | SerpAPI key for live web search. Falls back to mock data. |
 | `ALPHA_VANTAGE_KEY` | No | — | Alpha Vantage key for live stock prices. Falls back to mock data. |
 | `SPORTS_API_KEY` | No | — | Sports API key for live scores. Falls back to mock data. |
@@ -647,9 +680,32 @@ All configuration is via environment variables. Copy `.env.example` to `.env` to
 | `VERTEX_AGENT_ENGINE_ID` | No* | — | Agent Engine ID. Required when `MEMORY_SERVICE=vertex_ai`. |
 | `DEFAULT_MODEL` | No | `gemini-2.0-flash` | Gemini model for all agents. |
 | `REASONING_MODEL` | No | `gemini-2.0-flash` | Model for complex reasoning tasks. |
+| `ANTHROPIC_BASE_URL` | No | — | Optional Anthropic-compatible endpoint (for example MiniMax: `https://api.minimax.io/anthropic`). |
 | `ENVIRONMENT` | No | `development` | `development` or `production`. Production enables SQLite session persistence. |
+| `APP_API_KEY` | No* | — | Inbound API auth token(s), comma-separated. Required when auth is enabled. |
+| `REQUIRE_AUTH` | No | auto (`true` in production) | Force inbound auth on/off: `true` or `false`. |
+| `RATE_LIMIT_PER_MINUTE` | No | `60` | Per-key/IP inbound request limit (sliding window). |
+| `MAX_INPUT_CHARS` | No | `8000` | Max accepted inbound message length. |
+| `CORS_ORIGINS` | No | localhost defaults | Comma-separated allowed browser origins. |
 | `LOG_LEVEL` | No | `INFO` | Python logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
+| `HOST` | No | `127.0.0.1` | API bind host. Set `0.0.0.0` when exposing behind a container/LB. |
 | `PORT` | No | `8080` | Port for the FastAPI server. |
+
+### ADK Runtime + Backend Extensions
+
+| Variable | Purpose |
+|----------|---------|
+| `SESSION_SERVICE` | `auto`, `in_memory`, `database`, or `vertex_ai` |
+| `ARTIFACT_SERVICE` | `in_memory`, `file`, or `gcs` |
+| `ARTIFACT_GCS_BUCKET` | GCS bucket when `ARTIFACT_SERVICE=gcs` |
+| `ARTIFACT_FILE_DIR` | Filesystem path when `ARTIFACT_SERVICE=file` |
+| `VERTEX_RAG_CORPUS_ID` | Corpus ID when `MEMORY_SERVICE=vertex_rag` |
+| `ADK_ENABLE_RESUMABILITY` | Enable App-level resumability |
+| `ADK_ENABLE_CONTEXT_CACHE` | Enable context caching |
+| `ADK_ENABLE_EVENTS_COMPACTION` | Enable events compaction |
+| `ADK_DEFAULT_STREAMING_MODE` | `none`, `sse`, or `bidi` |
+| `ADK_SAVE_INPUT_BLOBS` | Persist input blobs as artifacts |
+| `ADK_MAX_LLM_CALLS` | Per-run model call cap |
 
 ### Service Selection Logic
 
@@ -659,64 +715,107 @@ All configuration is via environment variables. Copy `.env.example` to `.env` to
 
 **Memory service:**
 - `MEMORY_SERVICE=vertex_ai` + `VERTEX_PROJECT` + `VERTEX_AGENT_ENGINE_ID` are all set → `VertexAiMemoryBankService`
+- `MEMORY_SERVICE=vertex_rag` + `VERTEX_RAG_CORPUS_ID` are set → `VertexAiRagMemoryService`
 - Otherwise → `InMemoryMemoryService`
+
+**Artifact service:**
+- `ARTIFACT_SERVICE=gcs` + `ARTIFACT_GCS_BUCKET` set → `GcsArtifactService`
+- `ARTIFACT_SERVICE=file` (or `ARTIFACT_FILE_DIR` set) → `FileArtifactService`
+- Otherwise → `InMemoryArtifactService`
 
 **CLI `--persistent` flag:**
 Sets `ENVIRONMENT=production` at runtime, switching to `DatabaseSessionService` without requiring `.env` changes.
+
+**Inbound API auth + limits:**
+- Auth is automatically required in production unless overridden with `REQUIRE_AUTH=false`.
+- Supply token(s) in `APP_API_KEY`, then call API with `X-API-Key` or `Authorization: Bearer <token>`.
+- WebSocket supports `X-API-Key` header or `?api_key=<token>`.
+- Rate limiting is enforced via `RATE_LIMIT_PER_MINUTE`.
+
+`*` At least one provider path must be configured:
+- Gemini: `GOOGLE_API_KEY` + Gemini model name.
+- OpenAI: `OPENAI_API_KEY` + `DEFAULT_MODEL=openai/...`.
+- Anthropic: `ANTHROPIC_API_KEY` + `DEFAULT_MODEL=anthropic/...`.
+- MiniMax native: `MINIMAX_API_KEY` + `DEFAULT_MODEL=minimax/...`.
+- MiniMax Anthropic-compatible: `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL` + `DEFAULT_MODEL=anthropic/MiniMax-M2.5`.
+
+**MiniMax Coding Plan API (Anthropic-compatible):**
+- Set `ANTHROPIC_API_KEY` to your Coding Plan key.
+- Set `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic`.
+- Use `DEFAULT_MODEL=anthropic/MiniMax-M2.5`.
+
+---
+
+## ADK Skills
+
+This project now uses ADK-native skills (`google.adk.skills` + `SkillToolset`) from `workspace/skills/*`.
+
+Rules:
+- Each skill directory name must match `name:` in its `SKILL.md` frontmatter.
+- `agent:` in frontmatter scopes a skill to a specific agent.
+- Skills are exposed through native ADK tools: `list_skills`, `load_skill`, `load_skill_resource`.
+
+Current skills:
+- `workspace/skills/web-research`
+- `workspace/skills/daily-standup`
+- `workspace/skills/interview-prep`
 
 ---
 
 ## MCP Integration
 
-The assistant can connect to Model Context Protocol (MCP) servers to extend its tool set. MCP enables the assistant to interface with external services — databases, file systems, REST APIs, and more — through a standardized protocol.
+The assistant can connect to Model Context Protocol (MCP) servers to extend its tool set. MCP enables the assistant to interface with external services (databases, file systems, REST APIs, etc.) through a standardized protocol.
 
-### Connecting an MCP Server
+### Runtime Wiring (Built In)
 
-ADK supports MCP via `MCPToolset`. Add it to an agent's `tools` list:
+This project now supports optional ADK toolsets at runtime (wired into `root_agent`):
+- `MCPToolset` via `MCP_SERVER_*` environment variables
+- `OpenAPIToolset` via `OPENAPI_SPEC_*` environment variables
 
-```python
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+If unset, the assistant runs normally with built-in tools only.
 
-# Example: connect to a local filesystem MCP server
-mcp_tools = MCPToolset(
-    connection_params=StdioServerParameters(
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-filesystem", "/path/to/data"],
-    )
-)
+### MCP Environment Variables
+
+- `MCP_SERVER_COMMAND` (example: `npx`)
+- `MCP_SERVER_ARGS` (JSON array or shell-style string)
+- `MCP_SERVER_CWD` (optional)
+- `MCP_SERVER_ENV_JSON` (optional JSON object)
+- `MCP_AGENTS` (comma-separated list or `*`; defaults to core agents)
+
+Example:
+
+```bash
+export MCP_SERVER_COMMAND="npx"
+export MCP_SERVER_ARGS='["-y","@modelcontextprotocol/server-filesystem","/tmp"]'
 ```
 
-### Useful MCP Servers
+### OpenAPI Environment Variables
 
-| MCP Server | Use Case | Installation |
-|-----------|----------|-------------|
-| `@modelcontextprotocol/server-filesystem` | File access for `data_agent` | `npx -y @modelcontextprotocol/server-filesystem` |
-| `@modelcontextprotocol/server-sqlite` | Direct SQLite queries | `npx -y @modelcontextprotocol/server-sqlite` |
-| `@modelcontextprotocol/server-github` | GitHub repo access for `tech_agent` | `npx -y @modelcontextprotocol/server-github` |
-| `@modelcontextprotocol/server-google-maps` | Location context | `npx -y @modelcontextprotocol/server-google-maps` |
-| `@benborla29/mcp-server-mysql` | MySQL/MariaDB queries | via npm |
+- `OPENAPI_SPEC_PATH` (local JSON/YAML file)
+- `OPENAPI_SPEC_URL` (remote JSON/YAML URL)
+- `OPENAPI_SPEC_JSON` (inline JSON string)
+- `OPENAPI_SPEC_TYPE` (`json` or `yaml`)
+- `OPENAPI_TOOL_NAME_PREFIX` (optional)
+- `OPENAPI_AGENTS` (comma-separated list or `*`)
 
-### Adding MCP to a Specific Agent
+---
 
-In `personal_assistant/agents/data_agent.py`:
+## ADK Integrations
 
-```python
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+This repo supports ADK integrations in three ways:
 
-data_agent = LlmAgent(
-    name="data_agent",
-    tools=[
-        # existing tools...
-        MCPToolset(
-            connection_params=StdioServerParameters(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-sqlite", "data/analytics.db"],
-            )
-        ),
-    ],
-    ...
-)
-```
+1. **Built-in integration tools**
+- Enable Google Search tool:
+  - `ENABLE_GOOGLE_SEARCH_TOOL=true`
+  - `GOOGLE_SEARCH_AGENTS=research_agent,personal_assistant`
+
+2. **Toolset integrations**
+- `MCPToolset` via `MCP_SERVER_*` env vars
+- `OpenAPIToolset` via `OPENAPI_SPEC_*` env vars
+
+3. **External plugin integrations**
+- Load plugin classes/instances via import path:
+  - `ADK_INTEGRATION_PLUGINS=package.module:PluginClass,other.module:plugin_instance`
 
 ---
 
@@ -739,7 +838,23 @@ pytest tests/test_agents.py -v
 
 # Run tests matching a keyword
 pytest -k "test_callbacks" -v
+
+# Security + dependency audits
+bandit -q -r personal_assistant serve.py run.py mcp_server.py
+pip-audit --local
+pip check
 ```
+
+### CI
+
+GitHub Actions workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+
+CI runs on every push/PR:
+- `ruff check .`
+- `pytest -q`
+- `pip check`
+- `pip-audit --local`
+- `bandit` security scan
 
 ### Test Structure
 

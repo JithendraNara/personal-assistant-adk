@@ -6,7 +6,8 @@ from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 
 from ..shared.config import DEFAULT_MODEL
 from ..shared.prompts import finance_instruction_provider
-from ..shared.callbacks import before_tool_callback, after_tool_callback
+from ..shared.callbacks import before_tool_callback, after_tool_callback, on_tool_error_callback
+from ..shared.skills import build_skill_toolsets
 from ..tools.finance_tools import (
     calculate_budget,
     get_stock_quote,
@@ -29,8 +30,10 @@ finance_agent = LlmAgent(
         analyze_investment_portfolio,
         load_memory,
         PreloadMemoryTool(),
+        *build_skill_toolsets("finance_agent"),
     ],
     output_key="finance_last_check",
     before_tool_callback=before_tool_callback,
     after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )

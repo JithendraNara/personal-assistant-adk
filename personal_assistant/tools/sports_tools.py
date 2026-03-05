@@ -198,7 +198,7 @@ def get_cricket_scores(
 
     mock_recent = [
         {
-            "match": f"India vs Australia — 3rd Test",
+            "match": "India vs Australia — 3rd Test",
             "format": "test",
             "venue": "Sydney Cricket Ground",
             "result": "India won by 5 wickets",

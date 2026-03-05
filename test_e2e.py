@@ -1,112 +1,44 @@
 #!/usr/bin/env python3
 """
-End-to-end test script for the Personal Assistant ADK.
-Tests: imports, config validation, agent construction, and a live API call.
+End-to-end smoke test script for the Personal Assistant ADK.
+
+This is a standalone script (not a pytest module).
 
 Usage:
-    python test_e2e.py                    # Test imports + config only
-    python test_e2e.py --live             # Also run a live LLM call
+    python test_e2e.py         # imports + config only
+    python test_e2e.py --live  # also run a live LLM call
 """
+
 import asyncio
 import sys
-import os
 import time
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 PASS = "\033[92m✓\033[0m"
 FAIL = "\033[91m✗\033[0m"
-results = []
 
-def test(name, fn):
+
+def run_check(name, fn, results):
     try:
         fn()
         results.append((name, True, None))
         print(f"  {PASS} {name}")
-    except Exception as e:
-        results.append((name, False, str(e)))
-        print(f"  {FAIL} {name}: {e}")
+    except Exception as exc:
+        results.append((name, False, str(exc)))
+        print(f"  {FAIL} {name}: {exc}")
 
 
-# ─── Test 1: Core ADK Imports ────────────────────────────────────────────────
-print("\n[Test Suite] ADK Imports")
-
-def t_agents_import():
-    from google.adk.agents import Context, LlmAgent, SequentialAgent, ParallelAgent
-test("agents package", t_agents_import)
-
-def t_readonly_context():
-    from google.adk.agents.readonly_context import ReadonlyContext
-test("ReadonlyContext", t_readonly_context)
-
-def t_callback_context():
-    from google.adk.agents.callback_context import CallbackContext
-test("CallbackContext", t_callback_context)
-
-def t_models():
-    from google.adk.models import LlmRequest, LlmResponse
-test("models package", t_models)
-
-def t_tools():
-    from google.adk.tools import BaseTool, ToolContext, load_memory
-    from google.adk.tools.preload_memory_tool import PreloadMemoryTool
-test("tools package", t_tools)
-
-def t_services():
-    from google.adk.runners import Runner
-    from google.adk.sessions import InMemorySessionService
-    from google.adk.memory import InMemoryMemoryService
-    from google.adk.artifacts import InMemoryArtifactService
-test("services (runner, session, memory, artifacts)", t_services)
-
-
-# ─── Test 2: Project Module Imports ──────────────────────────────────────────
-print("\n[Test Suite] Project Modules")
-
-def t_config():
-    from personal_assistant.shared.config import validate_config, DEFAULT_MODEL, APP_NAME
-    assert APP_NAME == "personal_assistant"
-test("shared.config", t_config)
-
-def t_callbacks():
-    from personal_assistant.shared.callbacks import (
-        before_agent_callback, after_agent_callback,
-        before_model_callback, after_model_callback,
-        before_tool_callback, after_tool_callback,
-    )
-test("shared.callbacks", t_callbacks)
-
-def t_prompts():
-    from personal_assistant.shared.prompts import root_instruction_provider
-test("shared.prompts", t_prompts)
-
-def t_root_agent():
-    from personal_assistant.agent import root_agent
-    assert root_agent.name == "personal_assistant"
-    assert len(root_agent.sub_agents) == 9
-test("root_agent (9 sub-agents)", t_root_agent)
-
-
-# ─── Test 3: Config Validation ───────────────────────────────────────────────
-print("\n[Test Suite] Configuration")
-
-def t_validate():
-    from personal_assistant.shared.config import validate_config
-    cfg = validate_config()
-    if cfg["errors"]:
-        raise RuntimeError(f"Config errors: {cfg['errors']}")
-test("validate_config (no errors)", t_validate)
-
-
-# ─── Test 4: Live Agent Turn (optional) ──────────────────────────────────────
-if "--live" in sys.argv:
-    print("\n[Test Suite] Live Agent Turn")
-
+def _run_live_check():
     async def live_test():
         from personal_assistant.shared.config import (
-            APP_NAME, create_session_service, create_memory_service,
+            APP_NAME,
+            create_adk_app,
             create_artifact_service,
+            create_memory_service,
+            create_session_service,
         )
         from personal_assistant.agent import root_agent
         from google.adk.runners import Runner
@@ -115,14 +47,17 @@ if "--live" in sys.argv:
         session_service = create_session_service()
         memory_service = create_memory_service()
         artifact_service = create_artifact_service()
+        adk_runtime_app = create_adk_app(root_agent)
 
-        session = await session_service.create_session(
-            app_name=APP_NAME, user_id="test", session_id="e2e_test",
+        await session_service.create_session(
+            app_name=APP_NAME,
+            user_id="test",
+            session_id="e2e_test",
             state={"user:name": "Jithendra"},
         )
 
         runner = Runner(
-            agent=root_agent, app_name=APP_NAME,
+            app=adk_runtime_app,
             session_service=session_service,
             memory_service=memory_service,
             artifact_service=artifact_service,
@@ -136,7 +71,9 @@ if "--live" in sys.argv:
         response_text = ""
         start = time.time()
         async for event in runner.run_async(
-            user_id="test", session_id="e2e_test", new_message=content
+            user_id="test",
+            session_id="e2e_test",
+            new_message=content,
         ):
             if event.is_final_response() and event.content and event.content.parts:
                 for part in event.content.parts:
@@ -147,26 +84,74 @@ if "--live" in sys.argv:
         if not response_text:
             raise RuntimeError("No response from agent")
         print(f"  Response ({elapsed:.1f}s): {response_text[:200]}...")
-        return response_text
 
-    def t_live():
-        asyncio.run(live_test())
-
-    test("live agent turn (LLM call)", t_live)
+    asyncio.run(live_test())
 
 
-# ─── Summary ─────────────────────────────────────────────────────────────────
-print(f"\n{'─' * 60}")
-passed = sum(1 for _, ok, _ in results if ok)
-failed = sum(1 for _, ok, _ in results if not ok)
-print(f"Results: {passed} passed, {failed} failed, {len(results)} total")
+def run_suite(run_live: bool) -> int:
+    results = []
 
-if failed:
-    print(f"\nFailed tests:")
-    for name, ok, err in results:
-        if not ok:
-            print(f"  {FAIL} {name}: {err}")
-    sys.exit(1)
-else:
+    print("\n[Test Suite] ADK Imports")
+    run_check("agents package", lambda: __import__("google.adk.agents"), results)
+    run_check("ReadonlyContext", lambda: __import__("google.adk.agents.readonly_context"), results)
+    run_check("CallbackContext", lambda: __import__("google.adk.agents.callback_context"), results)
+    run_check("models package", lambda: __import__("google.adk.models"), results)
+    run_check("tools package", lambda: __import__("google.adk.tools"), results)
+    run_check("services (runner, session, memory, artifacts)", lambda: __import__("google.adk.runners"), results)
+
+    print("\n[Test Suite] Project Modules")
+
+    def t_config():
+        from personal_assistant.shared.config import APP_NAME
+
+        assert APP_NAME == "personal_assistant"
+
+    run_check("shared.config", t_config, results)
+    run_check("shared.callbacks", lambda: __import__("personal_assistant.shared.callbacks"), results)
+    run_check("shared.prompts", lambda: __import__("personal_assistant.shared.prompts"), results)
+
+    def t_root_agent():
+        from personal_assistant.agent import root_agent
+
+        assert root_agent.name == "personal_assistant"
+        assert len(root_agent.sub_agents) == 9
+
+    run_check("root_agent (9 sub-agents)", t_root_agent, results)
+
+    print("\n[Test Suite] Configuration")
+
+    def t_validate():
+        from personal_assistant.shared.config import validate_config
+
+        cfg = validate_config()
+        if cfg["errors"]:
+            raise RuntimeError(f"Config errors: {cfg['errors']}")
+
+    run_check("validate_config (no errors)", t_validate, results)
+
+    if run_live:
+        print("\n[Test Suite] Live Agent Turn")
+        run_check("live agent turn (LLM call)", _run_live_check, results)
+
+    print(f"\n{'─' * 60}")
+    passed = sum(1 for _, ok, _ in results if ok)
+    failed = sum(1 for _, ok, _ in results if not ok)
+    print(f"Results: {passed} passed, {failed} failed, {len(results)} total")
+
+    if failed:
+        print("\nFailed tests:")
+        for name, ok, err in results:
+            if not ok:
+                print(f"  {FAIL} {name}: {err}")
+        return 1
+
     print(f"\n{PASS} All tests passed!")
-    sys.exit(0)
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    return run_suite(run_live="--live" in argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

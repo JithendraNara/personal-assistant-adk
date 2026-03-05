@@ -1,15 +1,14 @@
-# Google ADK
-google-adk>=0.1.0
-
-# Environment & Config
+# Core runtime dependencies (mirrors pyproject.toml)
+google-adk>=0.6.0
+google-genai>=1.0.0
 python-dotenv>=1.0.0
-
-# Data Analysis (for data_agent tools)
+pyyaml>=6.0.0
+fastapi>=0.115.0
+uvicorn>=0.30.0
+httpx>=0.27.0
 pandas>=2.2.0
 numpy>=1.26.0
-
-# HTTP Client (for real API integrations)
-httpx>=0.27.0
+pydantic>=2.0.0
 
 # Optional: Real API integrations
 # Uncomment as you wire up real APIs:

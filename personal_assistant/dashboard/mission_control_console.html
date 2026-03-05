@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Control · Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/mission-control/assets/mission_control.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <section class="brand">
+        <span class="brand-kicker">Ops Deck</span>
+        <h1 class="brand-title">Mission Control</h1>
+        <p class="brand-sub">Operator console for direct `/chat` interactions with large transcript space.</p>
+      </section>
+
+      <nav class="nav">
+        <a href="/mission-control" class="nav-link">Overview</a>
+        <a href="/mission-control/sessions" class="nav-link">Sessions</a>
+        <a href="/mission-control/agents" class="nav-link">Agents</a>
+        <a href="/mission-control/console" class="nav-link">Console</a>
+      </nav>
+
+      <section class="rail-block">
+        <div class="rail-label">Runtime</div>
+        <div class="chip-row" id="runtime-chips"><span class="chip">Loading...</span></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Access Token</div>
+        <input id="api-key" class="token-input" type="password" placeholder="X-API-Key" autocomplete="off" />
+        <div class="row wrap">
+          <button id="save-key" class="btn main">Save Key</button>
+          <button id="clear-key" class="btn subtle">Clear</button>
+        </div>
+        <div id="auth-status" class="status-line"></div>
+      </section>
+
+      <section class="rail-block">
+        <div class="rail-label">Control</div>
+        <div class="row wrap">
+          <button id="refresh-now" class="btn main">Refresh</button>
+          <button id="toggle-live" class="btn subtle">Pause Live</button>
+        </div>
+        <div id="refresh-status" class="status-line">Waiting for snapshot...</div>
+      </section>
+
+      <section class="rail-block mono" style="font-size:12px;color:var(--text-muted);">
+        <div>Selected Session: <span id="selected-session">-</span></div>
+        <div>Route: <span id="active-route">-</span></div>
+      </section>
+    </aside>
+
+    <main class="stage">
+      <header class="head">
+        <div>
+          <h2 class="head-title">Operator Console</h2>
+          <div class="head-meta mono">
+            <span>Backend: <span id="meta-backend">-</span></span>
+            <span>Model: <span id="meta-model">-</span></span>
+            <span>Generated: <span id="meta-generated">-</span></span>
+          </div>
+        </div>
+        <div class="row wrap">
+          <button id="open-api-docs" class="btn ghost">API Docs</button>
+          <button id="open-health" class="btn ghost">Health</button>
+        </div>
+      </header>
+
+      <section class="content chat-grid">
+        <article class="panel chat-panel" style="min-height: 560px;">
+          <div class="row" style="justify-content:space-between;">
+            <h3 class="panel-title">Chat Transcript</h3>
+            <span id="chat-meta" class="mono" style="font-size:11px;color:var(--text-dim);">Ready</span>
+          </div>
+          <div id="chat-log" class="chat-log"></div>
+          <form id="chat-form" class="chat-form">
+            <input id="chat-user" class="select-input mono" type="text" value="user" placeholder="user id" />
+            <input id="chat-session" class="select-input mono" type="text" placeholder="session id (optional)" />
+            <input id="chat-message" class="chat-input" type="text" placeholder="Type command and send..." maxlength="8000" required />
+            <button type="submit" class="btn main">Send</button>
+          </form>
+        </article>
+
+        <article class="panel" style="min-height: 560px;">
+          <div class="row" style="justify-content:space-between;">
+            <h3 class="panel-title">Active Sessions</h3>
+            <span class="mono" style="font-size:11px;color:var(--text-dim);">click to load into console</span>
+          </div>
+          <div class="table-wrap" style="height: 260px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>User</th>
+                  <th>Status</th>
+                  <th>Turns</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="console-sessions"></tbody>
+            </table>
+          </div>
+          <div class="panel" style="margin-top:10px; min-height:240px;">
+            <div class="row" style="justify-content:space-between;">
+              <h3 class="panel-title">Recent Events</h3>
+            </div>
+            <div id="console-events" class="events"></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/mission-control/assets/mission_control_shared.js"></script>
+  <script>
+    const localState = {
+      sessions: [],
+    };
+
+    function pushBubble(role, message) {
+      const bubble = document.createElement("div");
+      bubble.className = `bubble ${role}`;
+      bubble.textContent = message;
+      const log = document.getElementById("chat-log");
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function renderSessionList(api) {
+      const body = document.getElementById("console-sessions");
+      if (!localState.sessions.length) {
+        body.innerHTML = `<tr><td colspan="5" class="empty">No sessions tracked yet.</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = localState.sessions.slice(0, 18).map((row) => `
+        <tr>
+          <td class="mono">${api.escapeHtml(api.truncate(row.session_id || "-", 20))}</td>
+          <td>${api.escapeHtml(row.user_id || "-")}</td>
+          <td><span class="pill ${api.escapeHtml(row.status || "cold")}">${api.escapeHtml(row.status || "cold")}</span></td>
+          <td>${api.escapeHtml(String(row.turns || 0))}</td>
+          <td><button class="btn subtle small use-session" data-session="${api.escapeHtml(row.session_id)}" data-route="${api.escapeHtml(row.last_route || "-")}">Use</button></td>
+        </tr>
+      `).join("");
+
+      body.querySelectorAll(".use-session").forEach((button) => {
+        button.addEventListener("click", () => {
+          const sessionId = button.dataset.session;
+          document.getElementById("chat-session").value = sessionId;
+          const route = button.dataset.route || "-";
+          api.setSelectedSession(sessionId, route);
+          document.getElementById("chat-meta").textContent = `Loaded session ${sessionId}`;
+        });
+      });
+    }
+
+    function renderEvents(snapshot, api) {
+      const events = snapshot.events || [];
+      const eventsEl = document.getElementById("console-events");
+      if (!events.length) {
+        eventsEl.innerHTML = `<div class="empty">No events yet.</div>`;
+        return;
+      }
+
+      eventsEl.innerHTML = events.slice(0, 30).map((evt) => `
+        <article class="event ${api.escapeHtml(evt.event || "turn")}">
+          <div class="event-head mono">
+            <span>${api.escapeHtml(evt.event || "turn")} · ${api.escapeHtml(evt.agent || "-")}</span>
+            <span>${api.escapeHtml(api.prettyTime(evt.timestamp))}</span>
+          </div>
+          <div class="event-msg">${api.escapeHtml(api.truncate(evt.message || "", 140))}</div>
+        </article>
+      `).join("");
+    }
+
+    async function onSnapshot(snapshot, api) {
+      localState.sessions = snapshot.sessions || [];
+      renderSessionList(api);
+      renderEvents(snapshot, api);
+    }
+
+    async function sendChat(event) {
+      event.preventDefault();
+      const api = MissionControlShared.api;
+      const userId = document.getElementById("chat-user").value.trim() || "user";
+      const sessionId = document.getElementById("chat-session").value.trim();
+      const message = document.getElementById("chat-message").value.trim();
+      if (!message) return;
+
+      pushBubble("user", `${userId}: ${message}`);
+      document.getElementById("chat-message").value = "";
+      document.getElementById("chat-meta").textContent = "Sending...";
+
+      try {
+        const payload = {
+          message,
+          user_id: userId,
+        };
+        if (sessionId) {
+          payload.session_id = sessionId;
+        }
+        const result = await api.sendChat(payload);
+
+        document.getElementById("chat-session").value = result.session_id || "";
+        api.setSelectedSession(result.session_id, (result.agents_involved || []).join(" -> "));
+        document.getElementById("chat-meta").textContent = `session=${result.session_id} · route=${(result.agents_involved || []).join(" -> ") || "unresolved"} · ${result.turn_duration_ms || 0}ms`;
+        pushBubble("assistant", result.response || "[No response]");
+        await api.refreshSnapshot();
+      } catch (error) {
+        document.getElementById("chat-meta").textContent = `Error: ${error.message}`;
+        pushBubble("system", `Error: ${error.message}`);
+      }
+    }
+
+    document.getElementById("chat-form").addEventListener("submit", sendChat);
+    pushBubble("system", "Console initialized. Pick a session or start a new one.");
+
+    MissionControlShared.boot({ onSnapshot, refreshMs: 2500 });
+  </script>
+</body>
+</html>

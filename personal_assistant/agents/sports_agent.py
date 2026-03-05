@@ -6,7 +6,8 @@ from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 
 from ..shared.config import DEFAULT_MODEL
 from ..shared.prompts import sports_instruction_provider
-from ..shared.callbacks import before_tool_callback, after_tool_callback
+from ..shared.callbacks import before_tool_callback, after_tool_callback, on_tool_error_callback
+from ..shared.skills import build_skill_toolsets
 from ..tools.sports_tools import (
     get_nfl_scores,
     get_nfl_standings,
@@ -31,8 +32,10 @@ sports_agent = LlmAgent(
         get_cricket_scores,
         load_memory,
         PreloadMemoryTool(),
+        *build_skill_toolsets("sports_agent"),
     ],
     output_key="sports_last_update",
     before_tool_callback=before_tool_callback,
     after_tool_callback=after_tool_callback,
+    on_tool_error_callback=on_tool_error_callback,
 )

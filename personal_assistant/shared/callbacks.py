@@ -3,13 +3,15 @@ Callback system — guardrails, logging, memory warmup, session lifecycle.
 
 Inspired by OpenClaw's middleware pattern, adapted for ADK's callback API.
 
-ADK Callback Signatures (from API reference):
-  before_agent_callback(context: Context) -> Content | None
-  after_agent_callback(context: Context) -> Content | None
+ADK Callback Signatures:
+  before_agent_callback(callback_context: CallbackContext) -> Content | None
+  after_agent_callback(callback_context: CallbackContext) -> Content | None
   before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse | None
   after_model_callback(callback_context: CallbackContext, llm_response: LlmResponse) -> LlmResponse | None
   before_tool_callback(tool: BaseTool, args: dict, tool_context: ToolContext) -> dict | None
   after_tool_callback(tool: BaseTool, args: dict, tool_context: ToolContext, tool_response: dict) -> dict | None
+  on_model_error_callback(callback_context: CallbackContext, llm_request: LlmRequest, error: Exception) -> LlmResponse | None
+  on_tool_error_callback(tool: BaseTool, args: dict, tool_context: ToolContext, error: Exception) -> dict | None
 """
 import logging
 import time
@@ -28,19 +30,43 @@ from personal_assistant.shared.security import check_tool_access, sanitize_input
 logger = logging.getLogger(__name__)
 
 
+def _resolve_agent_context(
+    callback_context: Context | CallbackContext | None = None,
+    *,
+    context: Context | CallbackContext | None = None,
+) -> Context | CallbackContext:
+    """
+    Normalize agent callback context across ADK versions.
+
+    ADK currently invokes agent callbacks with `callback_context=...`.
+    Older local tests and docs may still pass a positional/`context` argument.
+    """
+    resolved = callback_context or context
+    if resolved is None:
+        raise TypeError(
+            "Agent callback requires a context object via `callback_context` or `context`."
+        )
+    return resolved
+
+
 # ─── Before Agent Callback ────────────────────────────────────────────────────
 # Runs before agent starts processing. Used for:
 # - Session warmup (inject context from workspace files)
 # - Daily session rotation check
 # - Interaction logging
 
-async def before_agent_callback(context: Context) -> Optional[types.Content]:
+async def before_agent_callback(
+    callback_context: Context | CallbackContext | None = None,
+    *,
+    context: Context | CallbackContext | None = None,
+) -> Optional[types.Content]:
     """
     Pre-agent hook: injects workspace identity, checks session age, logs interaction.
     Returns None to proceed, or Content to short-circuit.
     """
-    agent_name = context.agent_name
-    state = context.state
+    resolved_context = _resolve_agent_context(callback_context, context=context)
+    agent_name = resolved_context.agent_name
+    state = resolved_context.state
 
     # Track interaction count
     count = state.get("_interaction_count", 0)
@@ -76,12 +102,17 @@ async def before_agent_callback(context: Context) -> Optional[types.Content]:
 # - Interaction metrics
 # - Session size pruning trigger
 
-async def after_agent_callback(context: Context) -> Optional[types.Content]:
+async def after_agent_callback(
+    callback_context: Context | CallbackContext | None = None,
+    *,
+    context: Context | CallbackContext | None = None,
+) -> Optional[types.Content]:
     """
     Post-agent hook: logs metrics, triggers memory save on significant interactions.
     """
-    agent_name = context.agent_name
-    state = context.state
+    resolved_context = _resolve_agent_context(callback_context, context=context)
+    agent_name = resolved_context.agent_name
+    state = resolved_context.state
 
     # Calculate turn duration
     start_time = state.get("temp:turn_start_time", time.time())
@@ -215,3 +246,44 @@ async def after_tool_callback(
 
     logger.debug(f"[{agent_name}] Tool {tool.name} completed")
     return None  # Use tool result as-is
+
+
+async def on_model_error_callback(
+    callback_context: CallbackContext, llm_request: LlmRequest, error: Exception
+) -> Optional[LlmResponse]:
+    """
+    LLM error hook: returns a safe fallback response so production UX degrades gracefully.
+    """
+    agent_name = callback_context.agent_name
+    logger.error(f"[{agent_name}] LLM error: {error}", exc_info=True)
+
+    return LlmResponse(
+        content=types.Content(
+            role="model",
+            parts=[
+                types.Part(
+                    text=(
+                        "I hit an upstream model error while processing your request. "
+                        "Please retry in a moment."
+                    )
+                )
+            ],
+        )
+    )
+
+
+async def on_tool_error_callback(
+    tool: BaseTool, args: dict[str, Any], tool_context: ToolContext, error: Exception
+) -> Optional[dict]:
+    """
+    Tool error hook: turns tool exceptions into structured error payloads for the model.
+    """
+    agent_name = tool_context.agent_name
+    logger.error(
+        f"[{agent_name}] Tool {tool.name} raised exception: {error}",
+        exc_info=True,
+    )
+    return {
+        "error": f"Tool '{tool.name}' failed: {error}",
+        "_suggestion": "Verify tool configuration and credentials, then retry.",
+    }

@@ -11,7 +11,6 @@ Run:
     pytest tests/test_eval.py -v
 """
 
-import pytest
 from personal_assistant.shared.security import check_tool_access, sanitize_input
 
 
@@ -82,6 +81,18 @@ class TestToolAccessPolicies:
         allowed, _ = check_tool_access("sports_agent", "web_search")
         assert not allowed
 
+    def test_workflow_agent_policies(self):
+        """Workflow sub-agents should be restricted to their intended tools."""
+        allowed, _ = check_tool_access("parallel_weather", "get_current_weather")
+        assert allowed
+        allowed, _ = check_tool_access("parallel_weather", "web_search")
+        assert not allowed
+
+        allowed, _ = check_tool_access("parallel_finance", "get_stock_quote")
+        assert allowed
+        allowed, _ = check_tool_access("parallel_finance", "calculate_budget")
+        assert not allowed
+
 
 # ─── Input Sanitization Tests ────────────────────────────────────────────────
 
@@ -124,7 +135,7 @@ class TestSkillsSystem:
         """Should discover skills from workspace/skills/ directory."""
         from personal_assistant.shared.skills import discover_skills
         skills = discover_skills()
-        assert len(skills) >= 3  # web_research, interview_prep, daily_standup
+        assert len(skills) >= 3  # web-research, interview-prep, daily-standup
 
     def test_skill_parsing(self):
         """Each skill should have name, description, and routing info."""
@@ -155,6 +166,13 @@ class TestSkillsSystem:
         research = next((s for s in skills if s.name == "web-research"), None)
         assert research is not None
         assert len(research.when_to_use) > 0
+
+    def test_build_skill_toolset_native_adk(self):
+        """Skill toolset builder should produce ADK SkillToolset for targeted agents."""
+        from personal_assistant.shared.skills import build_skill_toolsets
+        toolsets = build_skill_toolsets("research_agent")
+        assert len(toolsets) >= 1
+        assert type(toolsets[0]).__name__ == "SkillToolset"
 
 
 # ─── A2A Agent Card Tests ────────────────────────────────────────────────────

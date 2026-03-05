@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 def create_memory_mcp_server():
     """Create MCP server with memory tools."""
     from mcp import types as mcp_types
-    from mcp.server.lowlevel import Server, NotificationOptions
+    from mcp.server.lowlevel import Server
     from personal_assistant.memory.engine import UnifiedMemoryEngine
 
     app = Server("unified-memory-mcp")
@@ -318,17 +318,17 @@ async def run_stdio():
         )
 
 
-async def run_rest(host: str = "0.0.0.0", port: int = 8082):
+async def run_rest(host: str = "127.0.0.1", port: int = 8082):
     """Run memory REST API + dashboard server."""
     import uvicorn
     app = create_rest_app()
-    logger.info(f"")
-    logger.info(f"  🧠 UnifiedMemory is running!")
-    logger.info(f"")
+    logger.info("")
+    logger.info("  🧠 UnifiedMemory is running!")
+    logger.info("")
     logger.info(f"  Dashboard:  http://localhost:{port}")
     logger.info(f"  API Docs:   http://localhost:{port}/docs")
     logger.info(f"  Stats:      http://localhost:{port}/memories/stats")
-    logger.info(f"")
+    logger.info("")
     config = uvicorn.Config(app, host=host, port=port)
     server = uvicorn.Server(config)
     await server.serve()
@@ -344,7 +344,7 @@ if __name__ == "__main__":
         "--transport", choices=["stdio", "rest"], default="stdio",
         help="Transport: stdio (MCP) or rest (HTTP API)",
     )
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default=os.getenv("MEMORY_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=8082)
     args = parser.parse_args()
 

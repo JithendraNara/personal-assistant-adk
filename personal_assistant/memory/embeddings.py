@@ -8,7 +8,6 @@ Supports batching and caching for efficiency.
 import os
 import logging
 import hashlib
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

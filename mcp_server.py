@@ -1,126 +1,178 @@
 """
-MCP Server — expose Personal Assistant tools as MCP-compatible tools.
+Standalone MCP Server for UnifiedMemory.
 
-This allows any MCP-compatible client to discover and use our tools.
-Built following ADK's official MCP tool integration pattern:
-  google.adk.tools.mcp_tool.conversion_utils.adk_to_mcp_tool_type
+Exposes memory operations to Claude Code (and other MCP clients)
+by proxying requests to the live DigitalOcean UnifiedMemory API.
 
 Usage:
     python mcp_server.py                  # Run as stdio server
     python mcp_server.py --transport sse  # Run as SSE server (HTTP)
-
-Requires:
-    pip install mcp
 """
-
 import asyncio
 import json
 import os
+import sys
 import argparse
 import logging
+import urllib.request
+import urllib.parse
+import urllib.error
+from typing import Optional
 
 from dotenv import load_dotenv
 load_dotenv()
 
+# Optionally override these via environment variables in Claude's settings.json
+API_URL = os.environ.get("UM_API_URL", "http://64.227.16.66:8000/api/v1")
+API_KEY = os.environ.get("UM_API_KEY", "")
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [MCP] %(message)s")
 logger = logging.getLogger(__name__)
 
-# ─── Tool Registry ───────────────────────────────────────────────────────────
-# All tools that should be exposed via MCP
+# ─── API Client Helpers ──────────────────────────────────────────────────────
 
-def _get_exposed_tools():
-    """
-    Collect all tools to expose via MCP.
-    Uses lazy imports to avoid heavy startup cost.
-    """
-    from google.adk.tools.function_tool import FunctionTool
-
-    # Import all tool functions
-    from personal_assistant.tools.web_tools import (
-        web_search, fetch_webpage_summary, get_news_headlines,
-    )
-    from personal_assistant.tools.scheduler_tools import (
-        create_task, list_tasks, update_task_status,
-        build_daily_plan, set_reminder,
-    )
-    from personal_assistant.tools.finance_tools import (
-        get_stock_quote, analyze_budget, calculate_compound_interest,
-    )
-    from personal_assistant.tools.career_tools import (
-        search_jobs, analyze_skill_gaps,
-    )
-    from personal_assistant.tools.sports_tools import (
-        get_nfl_scores, get_f1_standings, get_cricket_scores,
-    )
-    from personal_assistant.tools.data_tools import (
-        profile_csv, generate_sql_query,
-    )
-
-    tools = {
-        # Web tools
-        "web_search": FunctionTool(web_search),
-        "fetch_webpage_summary": FunctionTool(fetch_webpage_summary),
-        "get_news_headlines": FunctionTool(get_news_headlines),
-        # Scheduler tools
-        "create_task": FunctionTool(create_task),
-        "list_tasks": FunctionTool(list_tasks),
-        "update_task_status": FunctionTool(update_task_status),
-        "build_daily_plan": FunctionTool(build_daily_plan),
-        "set_reminder": FunctionTool(set_reminder),
-        # Finance tools
-        "get_stock_quote": FunctionTool(get_stock_quote),
-        "analyze_budget": FunctionTool(analyze_budget),
-        "calculate_compound_interest": FunctionTool(calculate_compound_interest),
-        # Career tools
-        "search_jobs": FunctionTool(search_jobs),
-        "analyze_skill_gaps": FunctionTool(analyze_skill_gaps),
-        # Sports tools
-        "get_nfl_scores": FunctionTool(get_nfl_scores),
-        "get_f1_standings": FunctionTool(get_f1_standings),
-        "get_cricket_scores": FunctionTool(get_cricket_scores),
-        # Data tools
-        "profile_csv": FunctionTool(profile_csv),
-        "generate_sql_query": FunctionTool(generate_sql_query),
+def _make_request(endpoint: str, method: str = "GET", data: Optional[dict] = None) -> dict:
+    """"Helper to make HTTP requests to the UnifiedMemory API."""
+    url = f"{API_URL}/{endpoint.lstrip('/')}"
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
     }
-    return tools
+    
+    req_data = None
+    if data is not None:
+        req_data = json.dumps(data).encode("utf-8")
+        
+    req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
+    
+    try:
+        with urllib.request.urlopen(req) as response:
+            body = response.read().decode("utf-8")
+            if body:
+                return json.loads(body)
+            return {"status": "success"}
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        logger.error(f"UM API Error {e.code}: {error_body}")
+        raise RuntimeError(f"API Error {e.code}: {error_body}")
+    except Exception as e:
+        logger.error(f"UM API Connection Error: {e}")
+        raise RuntimeError(f"Connection Error: {e}")
 
 
 # ─── MCP Server ──────────────────────────────────────────────────────────────
 
 def create_mcp_server():
-    """Create and configure the MCP server with all exposed tools."""
-    from mcp import types as mcp_types
     from mcp.server.lowlevel import Server, NotificationOptions
     from mcp.server.models import InitializationOptions
-    from google.adk.tools.mcp_tool.conversion_utils import adk_to_mcp_tool_type
+    import mcp.types as mcp_types
+    from pydantic import Field
 
-    app = Server("personal-assistant-mcp-server")
-    tools = _get_exposed_tools()
+    app = Server("unified-memory-mcp")
 
     @app.list_tools()
     async def list_mcp_tools() -> list[mcp_types.Tool]:
-        """Advertise all tools to MCP clients."""
-        logger.info(f"MCP: Listing {len(tools)} tools")
-        return [adk_to_mcp_tool_type(tool) for tool in tools.values()]
+        """Advertise UnifiedMemory tools to MCP clients."""
+        return [
+            mcp_types.Tool(
+                name="um_add_memory",
+                description="Store a new fact, instruction, or context in long-term UnifiedMemory.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "The information to remember."
+                        },
+                        "container_tag": {
+                            "type": "string",
+                            "description": "Optional category tag (e.g., 'workspace', 'rules', 'preferences')."
+                        }
+                    },
+                    "required": ["content"]
+                }
+            ),
+            mcp_types.Tool(
+                name="um_search_memory",
+                description="Search long-term UnifiedMemory for relevant past context using semantic search.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The question or topic to search for."
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max results to return (default: 5)."
+                        }
+                    },
+                    "required": ["query"]
+                }
+            ),
+            mcp_types.Tool(
+                name="um_get_profile",
+                description="Retrieve the synthesized AI profile of the user based on all their memories.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            )
+        ]
 
     @app.call_tool()
     async def call_mcp_tool(name: str, arguments: dict) -> list[mcp_types.Content]:
         """Execute a tool call from an MCP client."""
-        logger.info(f"MCP: call_tool '{name}' with args: {list(arguments.keys())}")
-
-        tool = tools.get(name)
-        if not tool:
-            error = json.dumps({"error": f"Tool '{name}' not found. Available: {list(tools.keys())}"})
-            return [mcp_types.TextContent(type="text", text=error)]
+        logger.info(f"MCP: call_tool '{name}' with args: {arguments}")
 
         try:
-            # Execute ADK tool (tool_context=None since running outside ADK Runner)
-            result = await tool.run_async(args=arguments, tool_context=None)
-            response_text = json.dumps(result, indent=2, default=str)
-            return [mcp_types.TextContent(type="text", text=response_text)]
+            if name == "um_add_memory":
+                response = _make_request(
+                    "memories", 
+                    method="POST", 
+                    data={
+                        "content": arguments["content"],
+                        "container_tag": arguments.get("container_tag", "jeethendra"),
+                        "auto_extract": True
+                    }
+                )
+                return [mcp_types.TextContent(type="text", text=f"Successfully stored memory. ID: {response.get('id', 'unknown')}")]
+                
+            elif name == "um_search_memory":
+                limit = arguments.get("limit", 5)
+                response = _make_request(
+                    "memories/search", 
+                    method="POST",
+                    data={
+                        "query": arguments["query"],
+                        "limit": limit,
+                        "container_tag": "jeethendra"
+                    }
+                )
+                
+                results = response.get("results", [])
+                if not results or len(results) == 0:
+                     return [mcp_types.TextContent(type="text", text="No relevant memories found.")]
+                     
+                formatted_results = []
+                for idx, result in enumerate(results):
+                    score = result.get('score', 0.0)
+                    formatted_results.append(f"{idx+1}. {result.get('content', '')} (Confidence: {score:.2f})")
+                    
+                final_text = "Found the following relevant memories:\n\n" + "\n".join(formatted_results)
+                return [mcp_types.TextContent(type="text", text=final_text)]
+                
+            elif name == "um_get_profile":
+                response = _make_request("profile/jeethendra", method="GET")
+                return [mcp_types.TextContent(type="text", text=json.dumps(response, indent=2))]
+                
+            else:
+                return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
+
         except Exception as e:
             logger.error(f"MCP: Tool '{name}' failed: {e}")
-            error = json.dumps({"error": f"Tool execution failed: {str(e)}"})
-            return [mcp_types.TextContent(type="text", text=error)]
+            return [mcp_types.TextContent(type="text", text=f"Error: {e}")]
 
     return app
 
@@ -135,7 +187,6 @@ async def run_stdio_server():
 
     app = create_mcp_server()
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        logger.info("MCP: Starting stdio server...")
         await app.run(
             read_stream,
             write_stream,
@@ -150,7 +201,7 @@ async def run_stdio_server():
         )
 
 
-async def run_sse_server(host: str = "0.0.0.0", port: int = 8081):
+async def run_sse_server(host: str, port: int):
     """Run MCP server using SSE transport (for remote HTTP access)."""
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
@@ -177,7 +228,6 @@ async def run_sse_server(host: str = "0.0.0.0", port: int = 8081):
         ],
     )
 
-    logger.info(f"MCP: Starting SSE server on {host}:{port}")
     config = uvicorn.Config(starlette_app, host=host, port=port)
     server = uvicorn.Server(config)
     await server.serve()
@@ -186,15 +236,10 @@ async def run_sse_server(host: str = "0.0.0.0", port: int = 8081):
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [MCP] %(message)s")
-
-    parser = argparse.ArgumentParser(description="Personal Assistant MCP Server")
-    parser.add_argument(
-        "--transport", choices=["stdio", "sse"], default="stdio",
-        help="Transport type: stdio (local) or sse (HTTP, default: stdio)",
-    )
-    parser.add_argument("--host", default="0.0.0.0", help="SSE host (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8081, help="SSE port (default: 8081)")
+    parser = argparse.ArgumentParser(description="UnifiedMemory MCP Server")
+    parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8081)
     args = parser.parse_args()
 
     try:
@@ -203,4 +248,4 @@ if __name__ == "__main__":
         else:
             asyncio.run(run_stdio_server())
     except KeyboardInterrupt:
-        print("\nMCP Server stopped.")
+        pass

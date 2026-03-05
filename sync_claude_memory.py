@@ -16,9 +16,9 @@ import urllib.request
 import urllib.parse
 import time
 
-# The live DigitalOcean backend
-API_URL = "http://64.227.16.66:8000/api/v1"
-API_KEY = "um_master_bootstrap_key"
+# Read from environment variables — never hardcode secrets
+API_URL = os.environ.get("UM_API_URL", "http://64.227.16.66:8000/api/v1")
+API_KEY = os.environ.get("UM_API_KEY", "")
 CONTAINER_TAG = "jeethendra"  # Must match your main container
 
 

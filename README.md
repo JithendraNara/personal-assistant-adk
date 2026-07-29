@@ -523,6 +523,16 @@ Manually trigger a memory save for a session.
 {"status": "saved"}
 ```
 
+#### `POST /chat/stream`
+Stream agent response as Server-Sent Events (`text/event-stream`).
+
+```bash
+curl -N -X POST "http://localhost:8080/chat/stream" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: test-token" \
+  -d '{"message": "What is the weather in Fort Wayne?"}'
+```
+
 #### `GET /workflows`
 List available ADK 2.0 graph-based workflows.
 
@@ -533,7 +543,7 @@ List available ADK 2.0 graph-based workflows.
     {
       "name": "customer_refund_workflow",
       "description": "ADK 2.0 deterministic directed-graph workflow for customer refund processing.",
-      "edge_count": 5
+      "edge_count": 6
     },
     {
       "name": "incident_response_workflow",
@@ -544,32 +554,55 @@ List available ADK 2.0 graph-based workflows.
 }
 ```
 
+#### `GET /workflows/{workflow_name}`
+Inspect an ADK 2.0 workflow graph structure (edges, nodes, description).
+
 #### `POST /workflows/{workflow_name}/run`
-Execute an ADK 2.0 graph workflow with initial state inputs.
+Execute an ADK 2.0 graph workflow with initial state inputs. Pauses if a Human-in-the-Loop (`RequestInput`) checkpoint is reached (e.g. refunds > $100).
 
 **Request:**
 ```json
 {
   "state": {
     "purchase_history": {
-      "days_since_delivery": 10
+      "amount_usd": 149.99
     }
   }
 }
 ```
 
-**Response:**
+**HITL Paused Response:**
 ```json
 {
   "workflow": "customer_refund_workflow",
-  "status": "completed",
-  "state": {
-    "purchase_history": {"days_since_delivery": 10},
-    "is_eligible": true,
-    "status": "refunded",
-    "refund_tx": "TX_REFUND_99412",
-    "summary": "Refund workflow complete. Status: refunded, Tx: TX_REFUND_99412"
-  }
+  "status": "paused",
+  "interrupt_id": "hitl_refund_approval",
+  "message": "Refund amount ($149.99) exceeds $100.00 threshold. Operator approval required.",
+  "payload": {"order_id": "ORD-2026-8842", "amount_usd": 149.99}
+}
+```
+
+#### `POST /workflows/{workflow_name}/resume`
+Resume a paused HITL workflow after human operator approval or rejection.
+
+**Request:**
+```json
+{
+  "interrupt_id": "hitl_refund_approval",
+  "approved": true,
+  "state": {"order_id": "ORD-2026-8842", "amount_usd": 149.99}
+}
+```
+
+#### `GET /telemetry/status`
+Check OpenTelemetry (`google.adk.telemetry`) instrumentation status.
+
+```json
+{
+  "initialized": true,
+  "provider": "google.adk.telemetry",
+  "otlp_endpoint": "none",
+  "capture_content": true
 }
 ```
 

@@ -33,7 +33,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
@@ -304,6 +304,12 @@ async def lifespan(app: FastAPI):
     adk_runtime_app = create_adk_app(root_agent)
     default_run_config = create_default_run_config()
 
+    try:
+        from personal_assistant.shared.telemetry import setup_telemetry
+        setup_telemetry(app_name=APP_NAME)
+    except Exception as tel_err:
+        logger.warning(f"Telemetry setup deferred: {tel_err}")
+
     runner = Runner(
         app=adk_runtime_app,
         session_service=session_service,
@@ -403,6 +409,11 @@ class SessionInfo(BaseModel):
     created_at: str
 
 class WorkflowRunRequest(BaseModel):
+    state: dict[str, Any] = Field(default_factory=dict)
+
+class WorkflowResumeRequest(BaseModel):
+    interrupt_id: str
+    approved: bool = True
     state: dict[str, Any] = Field(default_factory=dict)
 
 class HealthResponse(BaseModel):
@@ -661,6 +672,18 @@ async def mission_control_session_detail(
     }
 
 
+@app.get("/telemetry/status")
+@app.get("/api/telemetry/status")
+async def telemetry_status(
+    raw_request: Request,
+    auth_key: str = Depends(require_api_access),
+):
+    """Return OpenTelemetry tracing status and settings."""
+    enforce_rate_limit(f"http:telemetry_status:{auth_key}:{_request_client_key(raw_request)}")
+    from personal_assistant.shared.telemetry import get_telemetry_status
+    return get_telemetry_status()
+
+
 @app.get("/workflows")
 @app.get("/api/workflows")
 async def list_workflows(
@@ -682,6 +705,38 @@ async def list_workflows(
     }
 
 
+@app.get("/workflows/{workflow_name}")
+@app.get("/api/workflows/{workflow_name}")
+async def get_workflow_detail(
+    workflow_name: str,
+    raw_request: Request,
+    auth_key: str = Depends(require_api_access),
+):
+    """Inspect an ADK 2.0 workflow graph structure (edges, nodes, description)."""
+    enforce_rate_limit(f"http:get_workflow_detail:{auth_key}:{_request_client_key(raw_request)}")
+    from personal_assistant.workflows import WORKFLOW_REGISTRY
+    if workflow_name not in WORKFLOW_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found.")
+
+    wf = WORKFLOW_REGISTRY[workflow_name]
+    edges_meta = []
+    for edge in wf.edges:
+        source = getattr(edge[0], "__name__", str(edge[0]))
+        target = edge[1]
+        if isinstance(target, dict):
+            target_meta = {str(k): getattr(v, "__name__", str(v)) for k, v in target.items()}
+        else:
+            target_meta = getattr(target, "__name__", str(target))
+        edges_meta.append({"source": source, "target": target_meta})
+
+    return {
+        "name": wf.name,
+        "description": wf.description,
+        "edges": edges_meta,
+        "edge_count": len(wf.edges),
+    }
+
+
 @app.post("/workflows/{workflow_name}/run")
 @app.post("/api/workflows/{workflow_name}/run")
 async def execute_workflow(
@@ -697,14 +752,42 @@ async def execute_workflow(
         raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found.")
 
     try:
-        final_state = run_workflow_by_name(workflow_name, request.state)
+        result = run_workflow_by_name(workflow_name, request.state)
         return {
             "workflow": workflow_name,
-            "status": "completed",
-            "state": final_state,
+            **result,
         }
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"Workflow execution failed: {err}")
+
+
+@app.post("/workflows/{workflow_name}/resume")
+@app.post("/api/workflows/{workflow_name}/resume")
+async def resume_workflow(
+    workflow_name: str,
+    request: WorkflowResumeRequest,
+    raw_request: Request,
+    auth_key: str = Depends(require_api_access),
+):
+    """Resume a paused ADK 2.0 workflow after human approval/rejection."""
+    enforce_rate_limit(f"http:resume_workflow:{auth_key}:{_request_client_key(raw_request)}")
+    from personal_assistant.workflows import WORKFLOW_REGISTRY, resume_workflow_by_name
+    if workflow_name not in WORKFLOW_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found.")
+
+    try:
+        result = resume_workflow_by_name(
+            name=workflow_name,
+            interrupt_id=request.interrupt_id,
+            approved=request.approved,
+            current_state=request.state,
+        )
+        return {
+            "workflow": workflow_name,
+            **result,
+        }
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Workflow resumption failed: {err}")
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -790,6 +873,65 @@ async def chat(
         agents_involved=agents_involved,
         turn_duration_ms=duration_ms,
     )
+
+
+@app.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    raw_request: Request,
+    auth_key: str = Depends(require_api_access),
+):
+    """Stream agent response as Server-Sent Events (text/event-stream)."""
+    user_id = request.user_id
+    session_id = request.session_id
+    enforce_rate_limit(f"http:chat_stream:{auth_key}:{_request_client_key(raw_request)}")
+
+    if not session_id:
+        today = datetime.now(timezone.utc).strftime("%Y%m%d")
+        session_id = f"session_{today}_{uuid4().hex[:6]}"
+        await session_service.create_session(
+            app_name=APP_NAME,
+            user_id=user_id,
+            session_id=session_id,
+            state={"user:name": user_id},
+        )
+
+    content = genai_types.Content(
+        role="user",
+        parts=[genai_types.Part(text=request.message)],
+    )
+
+    async def event_generator():
+        effective_run_config = _build_run_config(request.run_config)
+        yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
+
+        try:
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                invocation_id=request.invocation_id,
+                state_delta=request.state_delta,
+                new_message=content,
+                run_config=effective_run_config,
+            ):
+                author = getattr(event, "author", None)
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            data = {
+                                "type": "chunk",
+                                "author": author,
+                                "text": part.text,
+                                "is_final": event.is_final_response(),
+                            }
+                            yield f"data: {json.dumps(data)}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
+        except Exception as err:
+            logger.error(f"Streaming error: {err}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'error': str(err)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/sessions", response_model=SessionInfo)

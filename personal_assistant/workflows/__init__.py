@@ -1,24 +1,26 @@
 """
-ADK 2.0 Graph-Based Workflows.
+ADK 2.0 Graph-Based Workflows with Human-In-The-Loop (HITL) Interrupts.
 
-Demonstrates deterministic, directed-graph workflow execution using ADK 2.0's `google.adk.workflow.Workflow`.
-Separates application execution routing from open-ended language model calls.
+Demonstrates deterministic, directed-graph workflow execution using ADK 2.0's `google.adk.workflow.Workflow`
+and `google.adk.events.RequestInput` for Human-in-the-Loop approval checkpoints.
 """
 
 from typing import Any, Dict
 from google.adk.workflow import Workflow, START
+from google.adk.events import RequestInput
 
-# ─── 1. Customer Refund Processing Workflow (ADK 2.0 Graph) ───────────────────
+# ─── 1. Customer Refund Processing Workflow (ADK 2.0 Graph + HITL) ───────────
 
 def fetch_purchase_history(state: Dict[str, Any]) -> str:
     """Step 1: Fast deterministic API/DB call to fetch user order history."""
-    state["purchase_history"] = {
-        "order_id": "ORD-2026-8842",
-        "status": "delivered",
-        "days_since_delivery": 12,
-        "amount_usd": 149.99,
-        "item": "Smart Noise-Canceling Headphones"
-    }
+    if "purchase_history" not in state:
+        state["purchase_history"] = {
+            "order_id": "ORD-2026-8842",
+            "status": "delivered",
+            "days_since_delivery": 12,
+            "amount_usd": 149.99,
+            "item": "Smart Noise-Canceling Headphones"
+        }
     return "history_fetched"
 
 def evaluate_eligibility_rule(state: Dict[str, Any]) -> bool:
@@ -30,6 +32,33 @@ def evaluate_eligibility_rule(state: Dict[str, Any]) -> bool:
     state["is_eligible"] = is_eligible
     return is_eligible
 
+def check_high_value_approval(state: Dict[str, Any]) -> Dict[str, Any] | None:
+    """HITL Checkpoint: High-value refund threshold (> $100 USD) requires operator approval."""
+    history = state.get("purchase_history", {})
+    amount = history.get("amount_usd", 0.0)
+    
+    # If user/operator already provided approval decision, proceed
+    if "human_approval" in state:
+        return None
+
+    if amount > 100.0:
+        req = RequestInput(
+            interrupt_id="hitl_refund_approval",
+            message=f"Refund amount (${amount:.2f}) exceeds $100.00 threshold. Operator approval required.",
+            payload={"order_id": history.get("order_id"), "amount_usd": amount, "item": history.get("item")}
+        )
+        state["hitl_paused"] = True
+        state["hitl_interrupt_id"] = req.interrupt_id
+        state["hitl_message"] = req.message
+        state["hitl_payload"] = req.payload
+        return {
+            "status": "paused",
+            "interrupt_id": req.interrupt_id,
+            "message": req.message,
+            "payload": req.payload,
+        }
+    return None
+
 def issue_refund(state: Dict[str, Any]) -> str:
     """Step 3A: Programmatic refund processing via payment gateway."""
     state["refund_tx"] = "TX_REFUND_99412"
@@ -37,7 +66,7 @@ def issue_refund(state: Dict[str, Any]) -> str:
     return "refund_issued"
 
 def reject_refund(state: Dict[str, Any]) -> str:
-    """Step 3B: Mark request rejected when eligibility criteria fail."""
+    """Step 3B: Mark request rejected when eligibility criteria fail or human rejects."""
     state["refund_tx"] = None
     state["status"] = "rejected"
     return "refund_rejected"
@@ -51,11 +80,12 @@ def compose_notification(state: Dict[str, Any]) -> str:
 
 customer_refund_workflow = Workflow(
     name="customer_refund_workflow",
-    description="ADK 2.0 deterministic directed-graph workflow for customer refund processing.",
+    description="ADK 2.0 deterministic directed-graph workflow for customer refund processing with HITL approval.",
     edges=[
         (START, fetch_purchase_history),
         (fetch_purchase_history, evaluate_eligibility_rule),
-        (evaluate_eligibility_rule, {True: issue_refund, False: reject_refund}),
+        (evaluate_eligibility_rule, {True: check_high_value_approval, False: reject_refund}),
+        (check_high_value_approval, issue_refund),
         (issue_refund, compose_notification),
         (reject_refund, compose_notification),
     ]
@@ -65,12 +95,13 @@ customer_refund_workflow = Workflow(
 
 def fetch_system_logs(state: Dict[str, Any]) -> str:
     """Step 1: Collect system metrics and error logs."""
-    state["system_metrics"] = {
-        "service": "checkout-api",
-        "error_rate_pct": 8.4,
-        "primary_error": "504 Gateway Timeout on /v1/charge",
-        "severity": "CRITICAL"
-    }
+    if "system_metrics" not in state:
+        state["system_metrics"] = {
+            "service": "checkout-api",
+            "error_rate_pct": 8.4,
+            "primary_error": "504 Gateway Timeout on /v1/charge",
+            "severity": "CRITICAL"
+        }
     return "logs_fetched"
 
 def evaluate_severity_rule(state: Dict[str, Any]) -> bool:
@@ -106,26 +137,53 @@ WORKFLOW_REGISTRY: Dict[str, Workflow] = {
 }
 
 def run_workflow_by_name(name: str, initial_state: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """Execute an ADK 2.0 graph workflow deterministically over state."""
+    """
+    Execute an ADK 2.0 graph workflow deterministically over state.
+    Handles HITL pauses (RequestInput) cleanly.
+    """
     state = dict(initial_state or {})
     if name == "customer_refund_workflow":
-        if "purchase_history" not in state:
-            fetch_purchase_history(state)
+        fetch_purchase_history(state)
         is_eligible = evaluate_eligibility_rule(state)
-        if is_eligible:
-            issue_refund(state)
-        else:
+        if not is_eligible:
             reject_refund(state)
+            compose_notification(state)
+            return {"status": "completed", "state": state}
+
+        # Check HITL approval
+        hitl_pause = check_high_value_approval(state)
+        if hitl_pause:
+            return hitl_pause
+
+        # If human rejected
+        if state.get("human_approval") is False:
+            reject_refund(state)
+            compose_notification(state)
+            return {"status": "completed", "state": state}
+
+        issue_refund(state)
         compose_notification(state)
-        return state
+        return {"status": "completed", "state": state}
+
     elif name == "incident_response_workflow":
-        if "system_metrics" not in state:
-            fetch_system_logs(state)
+        fetch_system_logs(state)
         is_critical = evaluate_severity_rule(state)
         if is_critical:
             trigger_auto_failover(state)
         else:
             log_minor_warning(state)
-        return state
+        return {"status": "completed", "state": state}
     else:
         raise ValueError(f"Unknown workflow: {name}")
+
+def resume_workflow_by_name(
+    name: str,
+    interrupt_id: str,
+    approved: bool,
+    current_state: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Resume a paused ADK 2.0 workflow after human approval/rejection."""
+    state = dict(current_state or {})
+    state["human_approval"] = approved
+    state.pop("hitl_paused", None)
+    return run_workflow_by_name(name, state)

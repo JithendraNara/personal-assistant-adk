@@ -6,9 +6,10 @@ Provides background scheduling for daily briefings, session cleanup,
 and memory persistence using APScheduler (or asyncio fallback).
 """
 
-import logging
 import asyncio
-from typing import Callable, Any
+import logging
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

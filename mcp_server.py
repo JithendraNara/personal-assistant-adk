@@ -8,17 +8,17 @@ Usage:
     python mcp_server.py                  # Run as stdio server
     python mcp_server.py --transport sse  # Run as SSE server (HTTP)
 """
+import argparse
 import asyncio
 import json
-import os
-import argparse
 import logging
-import urllib.request
-import urllib.parse
+import os
 import urllib.error
-from typing import Optional
+import urllib.parse
+import urllib.request
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Optionally override these via environment variables in Claude's settings.json
@@ -47,7 +47,7 @@ def _validated_api_base() -> str:
 
 API_BASE = _validated_api_base()
 
-def _make_request(endpoint: str, method: str = "GET", data: Optional[dict] = None) -> dict:
+def _make_request(endpoint: str, method: str = "GET", data: dict | None = None) -> dict:
     """Helper to make HTTP requests to the UnifiedMemory API."""
     url = f"{API_BASE}/{endpoint.lstrip('/')}"
     headers = {
@@ -79,8 +79,8 @@ def _make_request(endpoint: str, method: str = "GET", data: Optional[dict] = Non
 # ─── MCP Server ──────────────────────────────────────────────────────────────
 
 def create_mcp_server():
-    from mcp.server.lowlevel import Server
     import mcp.types as mcp_types
+    from mcp.server.lowlevel import Server
 
     app = Server("unified-memory-mcp")
 
@@ -227,10 +227,10 @@ async def run_stdio_server():
 
 async def run_sse_server(host: str, port: int):
     """Run MCP server using SSE transport (for remote HTTP access)."""
+    import uvicorn
     from mcp.server.sse import SseServerTransport
     from starlette.applications import Starlette
     from starlette.routing import Route
-    import uvicorn
 
     app = create_mcp_server()
     sse = SseServerTransport("/messages/")

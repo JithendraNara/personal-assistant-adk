@@ -11,9 +11,9 @@ References:
   - https://google.github.io/adk-docs/a2a/
 """
 
-import os
 import logging
-from typing import Callable
+import os
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -176,10 +176,12 @@ def register_a2a_routes(
         session_service: The session service.
         APP_NAME: Application name for session scoping.
     """
+    from uuid import uuid4
+
     from fastapi import Request
     from fastapi.responses import JSONResponse
-    from uuid import uuid4
     from google.genai import types as genai_types
+
     from personal_assistant.shared.security import resolve_api_key
 
     base_url = os.getenv("A2A_BASE_URL", "http://localhost:8080")
@@ -258,11 +260,10 @@ def register_a2a_routes(
             session_id=session_id,
             new_message=content,
         ):
-            if event.is_final_response():
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if hasattr(part, "text") and part.text:
-                            response_parts.append(part.text)
+            if event.is_final_response() and event.content and event.content.parts:
+                for part in event.content.parts:
+                    if hasattr(part, "text") and part.text:
+                        response_parts.append(part.text)
 
         response_text = "".join(response_parts) or "[No response]"
 

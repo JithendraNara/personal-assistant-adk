@@ -33,6 +33,10 @@ def run_check(name, fn, results):
 
 def _run_live_check():
     async def live_test():
+        from google.adk.runners import Runner
+        from google.genai import types as genai_types
+
+        from personal_assistant.agent import root_agent
         from personal_assistant.shared.config import (
             APP_NAME,
             create_adk_app,
@@ -40,9 +44,6 @@ def _run_live_check():
             create_memory_service,
             create_session_service,
         )
-        from personal_assistant.agent import root_agent
-        from google.adk.runners import Runner
-        from google.genai import types as genai_types
 
         session_service = create_session_service()
         memory_service = create_memory_service()

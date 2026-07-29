@@ -10,16 +10,17 @@ This avoids ChromaDB dependency while keeping everything self-contained.
 Storage path: ~/.unified-memory/ (centralized for cross-platform access)
 """
 
-import os
 import json
+import logging
+import os
 import sqlite3
 import struct
-import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from personal_assistant.memory.models import (
-    Memory, MemoryType, UserProfile,
+    Memory,
+    MemoryType,
+    UserProfile,
 )
 
 logger = logging.getLogger(__name__)
@@ -89,7 +90,7 @@ class MemoryStore:
 
     # ─── Memory CRUD ─────────────────────────────────────────────────────
 
-    def save_memory(self, memory: Memory, embedding: Optional[list[float]] = None) -> Memory:
+    def save_memory(self, memory: Memory, embedding: list[float] | None = None) -> Memory:
         """Save a memory with optional embedding vector."""
         embedding_blob = _encode_vector(embedding) if embedding else None
 
@@ -116,7 +117,7 @@ class MemoryStore:
         self.conn.commit()
         return memory
 
-    def get_memory(self, memory_id: str) -> Optional[Memory]:
+    def get_memory(self, memory_id: str) -> Memory | None:
         """Get a single memory by ID."""
         row = self.conn.execute(
             "SELECT * FROM memories WHERE id = ?", (memory_id,)
@@ -128,8 +129,8 @@ class MemoryStore:
     def get_memories(
         self,
         container_tag: str = "default",
-        memory_type: Optional[MemoryType] = None,
-        source: Optional[str] = None,
+        memory_type: MemoryType | None = None,
+        source: str | None = None,
         limit: int = 100,
         include_expired: bool = False,
     ) -> list[Memory]:
@@ -144,7 +145,7 @@ class MemoryStore:
             query += " AND source = ?"
             params.append(source)
         if not include_expired:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             query += " AND (expires_at IS NULL OR expires_at > ?)"
             params.append(now)
 
@@ -164,7 +165,7 @@ class MemoryStore:
 
     def cleanup_expired(self) -> int:
         """Delete all expired memories (auto-forgetting)."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         # First clean up relationships
         self.conn.execute("""
             DELETE FROM relationships WHERE source_id IN
@@ -183,7 +184,7 @@ class MemoryStore:
 
     def get_all_embeddings(self, container_tag: str = "default") -> list[tuple[str, list[float]]]:
         """Get all (id, embedding) pairs for a container. Used for similarity search."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         rows = self.conn.execute("""
             SELECT id, embedding FROM memories
             WHERE container_tag = ? AND embedding IS NOT NULL
@@ -213,7 +214,7 @@ class MemoryStore:
         ))
         self.conn.commit()
 
-    def get_profile(self, container_tag: str) -> Optional[UserProfile]:
+    def get_profile(self, container_tag: str) -> UserProfile | None:
         """Get user profile for a container tag."""
         row = self.conn.execute(
             "SELECT * FROM user_profiles WHERE container_tag = ?", (container_tag,)
@@ -266,7 +267,7 @@ def _encode_vector(vec: list[float]) -> bytes:
     return struct.pack(f"{len(vec)}f", *vec)
 
 
-def _decode_vector(blob: bytes) -> Optional[list[float]]:
+def _decode_vector(blob: bytes) -> list[float] | None:
     """Decode a binary blob back to a float vector."""
     if not blob:
         return None

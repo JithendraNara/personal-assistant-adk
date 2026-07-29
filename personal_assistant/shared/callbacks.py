@@ -15,14 +15,13 @@ ADK Callback Signatures:
 """
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Optional, Any
+from datetime import UTC, datetime
+from typing import Any
 
 from google.adk.agents import Context
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest, LlmResponse
-from google.adk.tools import BaseTool
-from google.adk.tools import ToolContext
+from google.adk.tools import BaseTool, ToolContext
 from google.genai import types
 
 from personal_assistant.shared.security import check_tool_access, sanitize_input
@@ -59,7 +58,7 @@ async def before_agent_callback(
     callback_context: Context | CallbackContext | None = None,
     *,
     context: Context | CallbackContext | None = None,
-) -> Optional[types.Content]:
+) -> types.Content | None:
     """
     Pre-agent hook: injects workspace identity, checks session age, logs interaction.
     Returns None to proceed, or Content to short-circuit.
@@ -75,7 +74,7 @@ async def before_agent_callback(
 
     # Inject workspace identity into state if not already there
     if not state.get("_identity_loaded"):
-        from .config import SOUL_MD, USER_MD, AGENTS_MD, IDENTITY_MD
+        from .config import AGENTS_MD, IDENTITY_MD, SOUL_MD, USER_MD
         state["app:soul"] = SOUL_MD
         state["app:user_profile"] = USER_MD
         state["app:agents_instructions"] = AGENTS_MD
@@ -84,7 +83,7 @@ async def before_agent_callback(
         logger.info(f"[{agent_name}] Workspace identity loaded into session state")
 
     # Daily session rotation check
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     session_date = state.get("_session_date", "")
     if session_date and session_date != today:
         logger.info(f"[{agent_name}] Session spans new day ({session_date} → {today}), marking for rotation")
@@ -106,7 +105,7 @@ async def after_agent_callback(
     callback_context: Context | CallbackContext | None = None,
     *,
     context: Context | CallbackContext | None = None,
-) -> Optional[types.Content]:
+) -> types.Content | None:
     """
     Post-agent hook: logs metrics, triggers memory save on significant interactions.
     """
@@ -143,7 +142,7 @@ async def after_agent_callback(
 
 async def before_model_callback(
     callback_context: CallbackContext, llm_request: LlmRequest
-) -> Optional[LlmResponse]:
+) -> LlmResponse | None:
     """
     Pre-LLM hook: validates input, injects workspace context into system instruction.
     """
@@ -181,7 +180,7 @@ async def before_model_callback(
 
 async def after_model_callback(
     callback_context: CallbackContext, llm_response: LlmResponse
-) -> Optional[LlmResponse]:
+) -> LlmResponse | None:
     """
     Post-LLM hook: logs response, sanitizes output.
     """
@@ -198,7 +197,7 @@ async def after_model_callback(
 
 async def before_tool_callback(
     tool: BaseTool, args: dict[str, Any], tool_context: ToolContext
-) -> Optional[dict]:
+) -> dict | None:
     """
     Pre-tool hook: validates arguments, logs tool usage.
     """
@@ -216,7 +215,7 @@ async def before_tool_callback(
     tool_calls.append({
         "tool": tool.name,
         "agent": agent_name,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     })
     # Keep only last 50 tool calls to prevent state bloat
     state["_tool_calls"] = tool_calls[-50:]
@@ -233,7 +232,7 @@ async def before_tool_callback(
 
 async def after_tool_callback(
     tool: BaseTool, args: dict[str, Any], tool_context: ToolContext, tool_response: dict
-) -> Optional[dict]:
+) -> dict | None:
     """
     Post-tool hook: logs result, enriches errors.
     """
@@ -250,12 +249,12 @@ async def after_tool_callback(
 
 async def on_model_error_callback(
     callback_context: CallbackContext, llm_request: LlmRequest, error: Exception
-) -> Optional[LlmResponse]:
+) -> LlmResponse | None:
     """
     LLM error hook: returns a safe fallback response so production UX degrades gracefully.
     """
     agent_name = callback_context.agent_name
-    logger.error(f"[{agent_name}] LLM error: {error}", exc_info=True)
+    logger.error(f"[{agent_name}] LLM error: {error}")
 
     return LlmResponse(
         content=types.Content(
@@ -274,14 +273,13 @@ async def on_model_error_callback(
 
 async def on_tool_error_callback(
     tool: BaseTool, args: dict[str, Any], tool_context: ToolContext, error: Exception
-) -> Optional[dict]:
+) -> dict | None:
     """
     Tool error hook: turns tool exceptions into structured error payloads for the model.
     """
     agent_name = tool_context.agent_name
     logger.error(
         f"[{agent_name}] Tool {tool.name} raised exception: {error}",
-        exc_info=True,
     )
     return {
         "error": f"Tool '{tool.name}' failed: {error}",

@@ -5,13 +5,14 @@ Demonstrates deterministic, directed-graph workflow execution using ADK 2.0's `g
 and `google.adk.events.RequestInput` for Human-in-the-Loop approval checkpoints.
 """
 
-from typing import Any, Dict
-from google.adk.workflow import Workflow, START
+from typing import Any
+
 from google.adk.events import RequestInput
+from google.adk.workflow import START, Workflow
 
 # ─── 1. Customer Refund Processing Workflow (ADK 2.0 Graph + HITL) ───────────
 
-def fetch_purchase_history(state: Dict[str, Any]) -> str:
+def fetch_purchase_history(state: dict[str, Any]) -> str:
     """Step 1: Fast deterministic API/DB call to fetch user order history."""
     if "purchase_history" not in state:
         state["purchase_history"] = {
@@ -23,7 +24,7 @@ def fetch_purchase_history(state: Dict[str, Any]) -> str:
         }
     return "history_fetched"
 
-def evaluate_eligibility_rule(state: Dict[str, Any]) -> bool:
+def evaluate_eligibility_rule(state: dict[str, Any]) -> bool:
     """Step 2: Deterministic code rule check (no LLM required)."""
     history = state.get("purchase_history", {})
     days = history.get("days_since_delivery", 999)
@@ -32,11 +33,11 @@ def evaluate_eligibility_rule(state: Dict[str, Any]) -> bool:
     state["is_eligible"] = is_eligible
     return is_eligible
 
-def check_high_value_approval(state: Dict[str, Any]) -> Dict[str, Any] | None:
+def check_high_value_approval(state: dict[str, Any]) -> dict[str, Any] | None:
     """HITL Checkpoint: High-value refund threshold (> $100 USD) requires operator approval."""
     history = state.get("purchase_history", {})
     amount = history.get("amount_usd", 0.0)
-    
+
     # If user/operator already provided approval decision, proceed
     if "human_approval" in state:
         return None
@@ -59,19 +60,19 @@ def check_high_value_approval(state: Dict[str, Any]) -> Dict[str, Any] | None:
         }
     return None
 
-def issue_refund(state: Dict[str, Any]) -> str:
+def issue_refund(state: dict[str, Any]) -> str:
     """Step 3A: Programmatic refund processing via payment gateway."""
     state["refund_tx"] = "TX_REFUND_99412"
     state["status"] = "refunded"
     return "refund_issued"
 
-def reject_refund(state: Dict[str, Any]) -> str:
+def reject_refund(state: dict[str, Any]) -> str:
     """Step 3B: Mark request rejected when eligibility criteria fail or human rejects."""
     state["refund_tx"] = None
     state["status"] = "rejected"
-    return "refund_rejected"
+    return "reject_refund"
 
-def compose_notification(state: Dict[str, Any]) -> str:
+def compose_notification(state: dict[str, Any]) -> str:
     """Step 4: Final status summary node."""
     status = state.get("status", "unknown")
     tx = state.get("refund_tx", "N/A")
@@ -93,7 +94,7 @@ customer_refund_workflow = Workflow(
 
 # ─── 2. Incident Response Triage Workflow (ADK 2.0 Graph) ─────────────────────
 
-def fetch_system_logs(state: Dict[str, Any]) -> str:
+def fetch_system_logs(state: dict[str, Any]) -> str:
     """Step 1: Collect system metrics and error logs."""
     if "system_metrics" not in state:
         state["system_metrics"] = {
@@ -104,19 +105,19 @@ def fetch_system_logs(state: Dict[str, Any]) -> str:
         }
     return "logs_fetched"
 
-def evaluate_severity_rule(state: Dict[str, Any]) -> bool:
+def evaluate_severity_rule(state: dict[str, Any]) -> bool:
     """Step 2: Deterministic severity threshold check."""
     metrics = state.get("system_metrics", {})
     is_critical = metrics.get("error_rate_pct", 0) > 5.0 or metrics.get("severity") == "CRITICAL"
     state["is_critical"] = is_critical
     return is_critical
 
-def trigger_auto_failover(state: Dict[str, Any]) -> str:
+def trigger_auto_failover(state: dict[str, Any]) -> str:
     """Step 3A: Trigger automatic Cloudflare failover endpoint."""
     state["remediation_action"] = "routed_traffic_to_standby_region"
     return "failover_triggered"
 
-def log_minor_warning(state: Dict[str, Any]) -> str:
+def log_minor_warning(state: dict[str, Any]) -> str:
     """Step 3B: Record low-severity alert."""
     state["remediation_action"] = "logged_warning_metrics"
     return "warning_logged"
@@ -131,12 +132,12 @@ incident_response_workflow = Workflow(
     ]
 )
 
-WORKFLOW_REGISTRY: Dict[str, Workflow] = {
+WORKFLOW_REGISTRY: dict[str, Workflow] = {
     "customer_refund_workflow": customer_refund_workflow,
     "incident_response_workflow": incident_response_workflow,
 }
 
-def run_workflow_by_name(name: str, initial_state: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def run_workflow_by_name(name: str, initial_state: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Execute an ADK 2.0 graph workflow deterministically over state.
     Handles HITL pauses (RequestInput) cleanly.
@@ -180,8 +181,8 @@ def resume_workflow_by_name(
     name: str,
     interrupt_id: str,
     approved: bool,
-    current_state: Dict[str, Any]
-) -> Dict[str, Any]:
+    current_state: dict[str, Any]
+) -> dict[str, Any]:
     """Resume a paused ADK 2.0 workflow after human approval/rejection."""
     state = dict(current_state or {})
     state["human_approval"] = approved

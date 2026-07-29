@@ -15,19 +15,23 @@ Usage:
     profile = await engine.profile("jeethendra")
 """
 
-import os
 import json
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+import os
+from datetime import UTC, datetime, timedelta
 
+from personal_assistant.memory.embeddings import (
+    cosine_similarity,
+    embed_query,
+    embed_text,
+)
 from personal_assistant.memory.models import (
-    Memory, MemoryType, UserProfile, SearchResult,
+    Memory,
+    MemoryType,
+    SearchResult,
+    UserProfile,
 )
 from personal_assistant.memory.store import MemoryStore
-from personal_assistant.memory.embeddings import (
-    embed_text, embed_query, cosine_similarity,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +80,7 @@ class UnifiedMemoryEngine:
       - sync_stats(): Cross-platform sync overview
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.store = MemoryStore(db_path=db_path) if db_path else MemoryStore()
         # Run cleanup on init
         self.store.cleanup_expired()
@@ -123,7 +127,7 @@ class UnifiedMemoryEngine:
                     # Update existing memory instead of creating duplicate
                     old = existing[0].memory
                     old.content = mem.content
-                    old.updated_at = datetime.now(timezone.utc)
+                    old.updated_at = datetime.now(UTC)
                     old.confidence = min(1.0, old.confidence + 0.1)  # Reinforce
                     mem_obj = self.store.save_memory(old, embedding)
                     logger.info(f"Updated existing memory: {old.id}")
@@ -188,7 +192,7 @@ class UnifiedMemoryEngine:
         """
         existing = self.store.get_profile(container_tag)
         if existing:
-            age = datetime.now(timezone.utc) - existing.last_updated
+            age = datetime.now(UTC) - existing.last_updated
             if age < timedelta(hours=1):
                 return existing
 
@@ -256,7 +260,7 @@ class UnifiedMemoryEngine:
 
                 expires_at = None
                 if item.get("expires_in_hours"):
-                    expires_at = datetime.now(timezone.utc) + timedelta(
+                    expires_at = datetime.now(UTC) + timedelta(
                         hours=item["expires_in_hours"]
                     )
 

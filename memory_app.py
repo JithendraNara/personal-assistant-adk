@@ -11,9 +11,9 @@ Usage:
 """
 
 import asyncio
-import sys
-import os
 import logging
+import os
+import sys
 
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Prevent personal_assistant/__init__.py from importing google.adk
 # by pre-registering the package as a bare namespace
 import types
+
 pkg = types.ModuleType("personal_assistant")
 pkg.__path__ = [os.path.join(os.path.dirname(__file__), "personal_assistant")]
 pkg.__package__ = "personal_assistant"
@@ -47,8 +48,9 @@ def main():
     args = parser.parse_args()
 
     # Import after path setup
-    from personal_assistant.memory.server import create_rest_app
     import uvicorn
+
+    from personal_assistant.memory.server import create_rest_app
 
     app = create_rest_app()
 

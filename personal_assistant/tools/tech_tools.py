@@ -4,7 +4,6 @@ Technology and software engineering tools for the tech_agent.
 Covers code analysis, debugging, tech recommendations, and streaming setup.
 """
 import re
-from typing import Optional
 
 
 def analyze_code(
@@ -118,7 +117,7 @@ def analyze_code(
 def compare_tech_options(
     options: list[str],
     use_case: str,
-    criteria: Optional[list[str]] = None,
+    criteria: list[str] | None = None,
 ) -> dict:
     """
     Compare technology options for a given use case across key criteria.
@@ -182,8 +181,8 @@ def compare_tech_options(
 
 def get_streaming_setup_advice(
     device: str,
-    issue: Optional[str] = None,
-    goal: Optional[str] = None,
+    issue: str | None = None,
+    goal: str | None = None,
 ) -> dict:
     """
     Get setup advice, troubleshooting tips, or optimization recommendations for

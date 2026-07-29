@@ -2,10 +2,10 @@
 ADK runtime plugins for run/event lifecycle and error recovery.
 """
 
+import importlib
 import logging
 import os
 import time
-import importlib
 
 from google.adk.plugins import BasePlugin
 
@@ -83,23 +83,21 @@ class RuntimeStabilityPlugin(BasePlugin):
         invocation_id = getattr(invocation_context, "invocation_id", None)
         if invocation_id:
             self._run_started_at[invocation_id] = time.time()
-        return None
 
     async def after_run_callback(self, *, invocation_context):
         invocation_id = getattr(invocation_context, "invocation_id", None)
         if not invocation_id:
-            return None
+            return
         started = self._run_started_at.pop(invocation_id, None)
         if started is not None:
             duration_ms = int((time.time() - started) * 1000)
             logger.info("Invocation %s completed in %dms", invocation_id, duration_ms)
-        return None
+        return
 
     async def on_event_callback(self, *, invocation_context, event):
         # Keep event stream unchanged; this hook is used for runtime observability.
         _ = invocation_context
         _ = event
-        return None
 
     async def on_user_message_callback(self, *, invocation_context, user_message):
         _ = invocation_context

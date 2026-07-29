@@ -23,11 +23,11 @@ Usage:
     python -m personal_assistant.memory.server --transport rest  # REST API (port 8082)
 """
 
+import argparse
 import asyncio
 import json
-import os
-import argparse
 import logging
+import os
 from pathlib import Path
 
 try:
@@ -45,6 +45,7 @@ def create_memory_mcp_server():
     """Create MCP server with memory tools."""
     from mcp import types as mcp_types
     from mcp.server.lowlevel import Server
+
     from personal_assistant.memory.engine import UnifiedMemoryEngine
 
     app = Server("unified-memory-mcp")
@@ -176,6 +177,7 @@ def create_rest_app():
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import HTMLResponse
     from pydantic import BaseModel
+
     from personal_assistant.memory.engine import UnifiedMemoryEngine
 
     app = FastAPI(

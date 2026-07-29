@@ -16,11 +16,11 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
-from pathlib import Path
-from typing import Optional, Any, Literal
-from datetime import datetime, timezone
-from uuid import uuid4
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Literal
+from uuid import uuid4
 
 from fastapi import (
     Depends,
@@ -35,25 +35,23 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from google.adk.agents.run_config import StreamingMode
+from google.adk.runners import RunConfig, Runner
+from google.genai import types as genai_types
 from pydantic import BaseModel, Field, ValidationError
 
-from google.adk.runners import Runner
-from google.adk.agents.run_config import StreamingMode
-from google.adk.runners import RunConfig
-from google.genai import types as genai_types
-
+from personal_assistant.agent import root_agent
 from personal_assistant.shared.config import (
     APP_NAME,
     MAX_INPUT_CHARS,
+    create_adk_app,
+    create_artifact_service,
+    create_default_run_config,
+    create_memory_service,
+    create_session_service,
     get_cors_origins,
     validate_config,
-    create_session_service,
-    create_memory_service,
-    create_artifact_service,
-    create_adk_app,
-    create_default_run_config,
 )
-from personal_assistant.agent import root_agent
 from personal_assistant.shared.security import (
     check_api_key,
     check_rate_limit,
@@ -63,7 +61,7 @@ from personal_assistant.shared.security import (
 logger = logging.getLogger(__name__)
 
 # ─── Globals (initialized at startup) ────────────────────────────────────────
-runner: Optional[Runner] = None
+runner: Runner | None = None
 session_service = None
 memory_service = None
 adk_runtime_app = None
@@ -101,7 +99,7 @@ class MissionControlTelemetry:
 
     @staticmethod
     def _now_iso() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     @staticmethod
     def _status(last_event_ts: float) -> str:
@@ -805,7 +803,7 @@ async def chat(
 
     # Auto-create session if needed
     if not session_id:
-        today = datetime.now(timezone.utc).strftime("%Y%m%d")
+        today = datetime.now(UTC).strftime("%Y%m%d")
         session_id = f"session_{today}_{uuid4().hex[:6]}"
         await session_service.create_session(
             app_name=APP_NAME,
@@ -887,7 +885,7 @@ async def chat_stream(
     enforce_rate_limit(f"http:chat_stream:{auth_key}:{_request_client_key(raw_request)}")
 
     if not session_id:
-        today = datetime.now(timezone.utc).strftime("%Y%m%d")
+        today = datetime.now(UTC).strftime("%Y%m%d")
         session_id = f"session_{today}_{uuid4().hex[:6]}"
         await session_service.create_session(
             app_name=APP_NAME,
@@ -943,7 +941,7 @@ async def create_session(
     """Create a new session."""
     enforce_rate_limit(f"http:sessions:{auth_key}:{_request_client_key(raw_request)}")
 
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today = datetime.now(UTC).strftime("%Y%m%d")
     session_id = f"session_{today}_{uuid4().hex[:6]}"
 
     await session_service.create_session(
@@ -956,7 +954,7 @@ async def create_session(
     return SessionInfo(
         session_id=session_id,
         user_id=request.user_id,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -1070,7 +1068,7 @@ async def websocket_stream(websocket: WebSocket):
                 continue
 
             if not session_id:
-                today = datetime.now(timezone.utc).strftime("%Y%m%d")
+                today = datetime.now(UTC).strftime("%Y%m%d")
                 session_id = f"session_{today}_{uuid4().hex[:6]}"
                 await session_service.create_session(
                     app_name=APP_NAME,

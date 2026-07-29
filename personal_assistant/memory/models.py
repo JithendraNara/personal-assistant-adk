@@ -8,8 +8,7 @@ Inspired by Supermemory's architecture:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from enum import Enum
 from uuid import uuid4
 
@@ -36,7 +35,7 @@ class MemoryRelationship:
     """A directional relationship between two memories."""
     type: RelationshipType
     target_id: str
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -48,9 +47,9 @@ class Memory:
     memory_type: MemoryType = MemoryType.FACT
     source: str = "adk"              # "claude", "codex", "openclaw", "adk", "manual"
     confidence: float = 1.0          # 0-1, decays over time
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: Optional[datetime] = None   # For auto-forgetting
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime | None = None   # For auto-forgetting
     metadata: dict = field(default_factory=dict)
     relationships: list[MemoryRelationship] = field(default_factory=list)
 
@@ -59,7 +58,7 @@ class Memory:
         """Check if this memory has expired (auto-forgetting)."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     def to_dict(self) -> dict:
         """Serialize for storage."""
@@ -99,7 +98,7 @@ class UserProfile:
     container_tag: str
     static_facts: list[str] = field(default_factory=list)     # Long-term: "Senior engineer", "Uses Python"
     dynamic_context: list[str] = field(default_factory=list)   # Recent: "Working on memory system"
-    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_prompt_context(self) -> str:
         """Format as system prompt context injection."""

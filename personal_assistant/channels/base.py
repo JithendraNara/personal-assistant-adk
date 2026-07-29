@@ -8,8 +8,7 @@ Each channel adapter must implement receive(), send(), and session key generatio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +21,8 @@ class InboundMessage:
     channel_name: str
     metadata: dict = field(default_factory=dict)
     # OpenClaw concepts
-    peer_id: Optional[str] = None    # DM peer identifier
-    group_id: Optional[str] = None   # Group/guild identifier
+    peer_id: str | None = None    # DM peer identifier
+    group_id: str | None = None   # Group/guild identifier
     account_id: str = "default"      # Channel account (OpenClaw multi-account)
 
 

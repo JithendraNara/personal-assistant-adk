@@ -5,7 +5,7 @@ Includes job search, skill matching, and resume/interview utilities.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # REAL API: LinkedIn API, Indeed API, or job board aggregators
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "")
@@ -83,7 +83,7 @@ def search_jobs(
             "remote": remote_only or "Remote" in loc,
             "experience_level": experience_level,
             "salary_range": SKILL_MARKET_DATA.get("Python", {}).get("avg_salary_range", "N/A"),
-            "posted": datetime.now(timezone.utc).isoformat(),
+            "posted": datetime.now(UTC).isoformat(),
             "url": f"https://linkedin.com/jobs/mock-{i}",
             "key_skills": ["Python", "SQL", "Spark", "AWS"] if "Data" in title else ["Python", "Node.js", "AWS"],
         }

@@ -11,13 +11,14 @@ Plugin directory structure:
             __init__.py     — Python module with hook implementations
 """
 
-import os
-import json
 import importlib
 import importlib.util
+import json
 import logging
+import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ class PluginManager:
 
         return discovered
 
-    def _load_plugin(self, plugin_dir: str, manifest_path: str) -> Optional[Plugin]:
+    def _load_plugin(self, plugin_dir: str, manifest_path: str) -> Plugin | None:
         """Load a single plugin from its directory."""
         with open(manifest_path, "r") as f:
             manifest = json.load(f)
@@ -177,6 +178,6 @@ class PluginManager:
             for p in self._plugins.values()
         ]
 
-    def get_plugin(self, name: str) -> Optional[Plugin]:
+    def get_plugin(self, name: str) -> Plugin | None:
         """Get a plugin by name."""
         return self._plugins.get(name)

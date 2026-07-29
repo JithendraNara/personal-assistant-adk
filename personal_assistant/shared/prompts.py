@@ -3,7 +3,8 @@ Prompt templates using InstructionProvider pattern.
 Workspace identity files are injected dynamically at each turn.
 """
 from google.adk.agents.readonly_context import ReadonlyContext
-from .config import SOUL_MD, USER_MD, AGENTS_MD, USER_PROFILE
+
+from .config import AGENTS_MD, SOUL_MD, USER_MD, USER_PROFILE
 
 
 def root_instruction_provider(context: ReadonlyContext) -> str:

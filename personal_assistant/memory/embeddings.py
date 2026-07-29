@@ -5,9 +5,9 @@ Uses Google's text-embedding-004 model for high-quality semantic embeddings.
 Supports batching and caching for efficiency.
 """
 
-import os
-import logging
 import hashlib
+import logging
+import os
 
 logger = logging.getLogger(__name__)
 

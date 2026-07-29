@@ -9,22 +9,21 @@ State keys used:
   - tool_context.state['scheduler_reminders'] — list of reminder dicts
 """
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from google.adk.tools import ToolContext
 
 
 def _now() -> str:
     """UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _today() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-def _resolve_date(date_str: Optional[str]) -> Optional[str]:
+def _resolve_date(date_str: str | None) -> str | None:
     """Resolve relative date strings to ISO format."""
     if not date_str:
         return None
@@ -44,7 +43,7 @@ def create_task(
     tool_context: ToolContext,
     description: str = "",
     priority: str = "medium",
-    due_date: Optional[str] = None,
+    due_date: str | None = None,
     category: str = "general",
 ) -> dict:
     """
@@ -94,8 +93,8 @@ def create_task(
 def list_tasks(
     tool_context: ToolContext,
     filter_status: str = "pending",
-    filter_priority: Optional[str] = None,
-    filter_category: Optional[str] = None,
+    filter_priority: str | None = None,
+    filter_category: str | None = None,
 ) -> dict:
     """
     List tasks from session state with optional filters.
@@ -182,7 +181,7 @@ def update_task_status(
 
 def build_daily_plan(
     tool_context: ToolContext,
-    date: Optional[str] = None,
+    date: str | None = None,
     work_hours: int = 8,
     include_breaks: bool = True,
 ) -> dict:

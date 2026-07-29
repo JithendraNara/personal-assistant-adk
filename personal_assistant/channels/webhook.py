@@ -54,4 +54,3 @@ class WebhookChannel(BaseChannel):
 
     async def stop(self) -> None:
         """No-op for webhook."""
-        pass

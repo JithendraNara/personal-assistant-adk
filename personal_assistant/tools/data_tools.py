@@ -5,7 +5,6 @@ Supports CSV profiling, SQL query generation, and data summarization.
 """
 
 import os
-from typing import Optional
 
 # Optional heavy deps — gracefully degrade if not installed
 try:
@@ -179,7 +178,7 @@ def analyze_dataframe_from_csv(file_path: str, analysis_request: str) -> dict:
 
 def describe_data_for_visualization(
     file_path: str,
-    chart_type: Optional[str] = None,
+    chart_type: str | None = None,
 ) -> dict:
     """
     Analyze a CSV and recommend appropriate visualizations with ready-to-use code.

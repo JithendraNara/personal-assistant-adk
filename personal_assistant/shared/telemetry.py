@@ -5,17 +5,17 @@ Instruments ADK model calls, tool executions, and graph workflows using `google.
 Supports optional OTLP exporter export to Jaeger, Zipkin, or GCP Cloud Trace.
 """
 
-import os
 import logging
-from typing import Any, Dict
+import os
+import typing
 
-from google.adk.telemetry import TelemetryConfig, ContentCapturingMode, tracing
+from google.adk.telemetry import TelemetryConfig
 
 logger = logging.getLogger(__name__)
 
 _TELEMETRY_INITIALIZED = False
 
-def setup_telemetry(app_name: str = "personal-assistant-adk") -> Dict[str, Any]:
+def setup_telemetry(app_name: str = "personal-assistant-adk") -> dict[str, typing.Any]:
     """
     Initialize OpenTelemetry tracing for ADK.
     Reads OTEL_EXPORTER_OTLP_ENDPOINT from environment if provided.
@@ -25,11 +25,10 @@ def setup_telemetry(app_name: str = "personal-assistant-adk") -> Dict[str, Any]:
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     capture_content = os.getenv("TELEMETRY_CAPTURE_CONTENT", "true").lower() in ("true", "1")
 
-    mode = ContentCapturingMode.VERBOSE if capture_content else ContentCapturingMode.DISABLED
-
-    config = TelemetryConfig(
+    # Initialize TelemetryConfig
+    TelemetryConfig(
         capture_message_content=capture_content,
-        genai_semconv_stability_opt_in=True
+        genai_semconv_stability_opt_in=True,
     )
 
     _TELEMETRY_INITIALIZED = True
@@ -42,7 +41,7 @@ def setup_telemetry(app_name: str = "personal-assistant-adk") -> Dict[str, Any]:
         "capture_content": capture_content,
     }
 
-def get_telemetry_status() -> Dict[str, Any]:
+def get_telemetry_status() -> dict[str, typing.Any]:
     """Return OpenTelemetry instrumentation status."""
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     return {

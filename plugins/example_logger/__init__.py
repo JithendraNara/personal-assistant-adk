@@ -7,7 +7,7 @@ Hooks implemented: on_load, on_unload, before_turn, after_turn
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 logger = logging.getLogger("plugin.example_logger")
 
@@ -34,7 +34,7 @@ def before_turn(agent_name: str, message: str, **kwargs):
         "event": "before_turn",
         "agent": agent_name,
         "message_length": len(message),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
     _write_log(entry)
     if _config.get("verbose"):
@@ -48,7 +48,7 @@ def after_turn(agent_name: str, response: str, duration_ms: int = 0, **kwargs):
         "agent": agent_name,
         "response_length": len(response),
         "duration_ms": duration_ms,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
     _write_log(entry)
     if _config.get("verbose"):

@@ -41,8 +41,13 @@ def test_root_agent_uses_instruction_provider():
 
 def test_specialist_agents_have_output_keys():
     from personal_assistant.agents import (
-        research_agent, data_agent, career_agent,
-        finance_agent, sports_agent, scheduler_agent, tech_agent
+        career_agent,
+        data_agent,
+        finance_agent,
+        research_agent,
+        scheduler_agent,
+        sports_agent,
+        tech_agent,
     )
     assert research_agent.output_key == "research_last_topic"
     assert data_agent.output_key == "data_last_analysis"
@@ -54,8 +59,9 @@ def test_specialist_agents_have_output_keys():
 
 
 def test_daily_briefing_is_sequential():
-    from personal_assistant.agent import daily_briefing
     from google.adk.agents import SequentialAgent
+
+    from personal_assistant.agent import daily_briefing
     assert isinstance(daily_briefing, SequentialAgent)
     sub_names = [a.name for a in daily_briefing.sub_agents]
     assert "briefing_weather" in sub_names
@@ -65,18 +71,19 @@ def test_daily_briefing_is_sequential():
 
 
 def test_info_gatherer_is_parallel():
-    from personal_assistant.agent import info_gatherer
     from google.adk.agents import ParallelAgent
+
+    from personal_assistant.agent import info_gatherer
     assert isinstance(info_gatherer, ParallelAgent)
 
 
 def test_workflow_subagents_have_runtime_tools():
     from personal_assistant.agent import (
-        briefing_weather,
         briefing_news,
-        parallel_weather,
-        parallel_sports,
+        briefing_weather,
         parallel_finance,
+        parallel_sports,
+        parallel_weather,
     )
 
     def fn_names(agent):

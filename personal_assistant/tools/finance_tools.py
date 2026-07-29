@@ -5,7 +5,7 @@ Covers budgeting, investment analysis, deal-finding, and expense tracking.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # REAL API keys
 ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY", "")
@@ -145,7 +145,7 @@ def get_stock_quote(symbol: str) -> dict:
         "volume": 15_420_000,
         "52_week_range": f"${price * 0.75:.2f} – ${price * 1.35:.2f}",
         "source": "mock — configure ALPHA_VANTAGE_KEY for live quotes",
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
         "disclaimer": "Not financial advice. Verify on brokerage platform before acting.",
     }
 

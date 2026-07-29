@@ -10,9 +10,9 @@ Patterns used:
   - Input sanitization (OpenClaw channels.allowlists)
 """
 
+import logging
 import os
 import re
-import logging
 import time
 from collections import defaultdict, deque
 from threading import Lock
@@ -327,8 +327,13 @@ def security_audit() -> dict:
 
     # 5. Tool policy coverage
     from personal_assistant.agents import (
-        research_agent, data_agent, finance_agent, scheduler_agent,
-        sports_agent, career_agent, tech_agent,
+        career_agent,
+        data_agent,
+        finance_agent,
+        research_agent,
+        scheduler_agent,
+        sports_agent,
+        tech_agent,
     )
     all_agents = [
         research_agent, data_agent, finance_agent, scheduler_agent,

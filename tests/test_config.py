@@ -1,8 +1,15 @@
 """Tests for shared configuration."""
 from personal_assistant.shared.config import (
-    APP_NAME, USER_PROFILE, SOUL_MD, USER_MD,
-    create_session_service, create_artifact_service, create_default_run_config, create_adk_app,
-    validate_config, _load_workspace_file,
+    APP_NAME,
+    SOUL_MD,
+    USER_MD,
+    USER_PROFILE,
+    _load_workspace_file,
+    create_adk_app,
+    create_artifact_service,
+    create_default_run_config,
+    create_session_service,
+    validate_config,
 )
 
 

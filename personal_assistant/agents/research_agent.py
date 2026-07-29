@@ -4,11 +4,11 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import load_memory
 from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 
+from ..shared.callbacks import after_tool_callback, before_tool_callback, on_tool_error_callback
 from ..shared.config import DEFAULT_MODEL
 from ..shared.prompts import research_instruction_provider
-from ..shared.callbacks import before_tool_callback, after_tool_callback, on_tool_error_callback
 from ..shared.skills import build_skill_toolsets
-from ..tools.web_tools import web_search, fetch_webpage_summary, get_news_headlines, summarize_text
+from ..tools.web_tools import fetch_webpage_summary, get_news_headlines, summarize_text, web_search
 
 research_agent = LlmAgent(
     name="research_agent",

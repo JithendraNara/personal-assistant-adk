@@ -6,7 +6,6 @@ Maintains a registry of active channels and handles message routing.
 """
 
 import logging
-from typing import Optional
 
 from personal_assistant.channels.base import BaseChannel
 
@@ -35,7 +34,7 @@ class ChannelRegistry:
             del self._channels[name]
             logger.info(f"Unregistered channel: {name}")
 
-    def get(self, name: str) -> Optional[BaseChannel]:
+    def get(self, name: str) -> BaseChannel | None:
         """Get a channel by name."""
         return self._channels.get(name)
 

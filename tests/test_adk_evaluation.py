@@ -5,9 +5,10 @@ Uses `google.adk.evaluation` (`EvalCase`, `EvalSet`, `Invocation`) to evaluate a
 trajectory correctness, and response structure.
 """
 
-from google.genai import types
 from google.adk.evaluation.eval_case import EvalCase, Invocation
 from google.adk.evaluation.eval_set import EvalSet
+from google.genai import types
+
 from personal_assistant.agent import root_agent
 from personal_assistant.workflows import customer_refund_workflow, incident_response_workflow
 

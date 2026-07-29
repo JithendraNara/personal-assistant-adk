@@ -10,11 +10,11 @@ Usage:
     python sync_claude_memory.py
 """
 
-import os
 import json
-import urllib.request
-import urllib.parse
+import os
 import time
+import urllib.parse
+import urllib.request
 
 # Read from environment variables — never hardcode secrets
 API_URL = os.environ.get("UM_API_URL", "http://64.227.16.66:8000/api/v1")

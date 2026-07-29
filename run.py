@@ -13,25 +13,28 @@ Alternative:
     adk run personal_assistant              # Simple CLI
 """
 
-import asyncio
 import argparse
-import sys
-import os
+import asyncio
 import logging
-from datetime import datetime, timezone
+import os
+import sys
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from personal_assistant.shared.config import (
-    validate_config, APP_NAME, USER_PROFILE,
-    create_session_service,
-    create_memory_service,
-    create_artifact_service,
-    create_adk_app,
-    create_default_run_config,
-)
 from google.adk.runners import Runner
 from google.genai import types as genai_types
+
 from personal_assistant.agent import root_agent
+from personal_assistant.shared.config import (
+    APP_NAME,
+    USER_PROFILE,
+    create_adk_app,
+    create_artifact_service,
+    create_default_run_config,
+    create_memory_service,
+    create_session_service,
+    validate_config,
+)
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -180,7 +183,7 @@ async def main(session_id: str = None, user_id: str = None, persistent: bool = F
     user_id = user_id or USER_PROFILE["name"].lower()
 
     # Date-scoped session ID (daily rotation like OpenClaw)
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today = datetime.now(UTC).strftime("%Y%m%d")
     session_id = session_id or f"session_{today}_{uuid4().hex[:6]}"
 
     # Create session with pre-populated state

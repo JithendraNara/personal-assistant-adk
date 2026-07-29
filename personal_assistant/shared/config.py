@@ -348,8 +348,8 @@ def create_adk_app(root_agent):
     Create an ADK App so app-level runtime features are active.
     """
     from google.adk.apps import App, ResumabilityConfig
-    from google.adk.runners import ContextCacheConfig
     from google.adk.apps.app import EventsCompactionConfig
+    from google.adk.runners import ContextCacheConfig
 
     from personal_assistant.shared.adk_plugins import create_runtime_plugins as _create
 

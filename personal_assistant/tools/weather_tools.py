@@ -6,7 +6,7 @@ Falls back to deterministic mock data for local/dev environments.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -82,7 +82,7 @@ def get_current_weather(location: str, units: str = "imperial") -> dict:
                 "units": units,
                 "unit_label": unit_label,
                 "source": "openweathermap",
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
             }
         except Exception as exc:
             return {
@@ -104,5 +104,5 @@ def get_current_weather(location: str, units: str = "imperial") -> dict:
         "units": units,
         "unit_label": "F" if units == "imperial" else ("C" if units == "metric" else "K"),
         "source": "mock — configure OPENWEATHER_KEY for live weather",
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
     }

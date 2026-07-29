@@ -1,11 +1,11 @@
 """Tests for the callback system."""
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 class MockState(dict):
     """Mock ADK State (mutable dict-like object)."""
-    pass
 
 
 class MockContext:
@@ -93,8 +93,9 @@ async def test_before_model_allows_normal_text():
 
 @pytest.mark.asyncio
 async def test_after_agent_tracks_agents_used():
-    from personal_assistant.shared.callbacks import after_agent_callback
     import time
+
+    from personal_assistant.shared.callbacks import after_agent_callback
     ctx = MockContext(
         agent_name="research_agent",
         state={"temp:turn_start_time": time.time(), "_interaction_count": 1}
@@ -106,8 +107,9 @@ async def test_after_agent_tracks_agents_used():
 
 @pytest.mark.asyncio
 async def test_after_agent_accepts_callback_context_keyword():
-    from personal_assistant.shared.callbacks import after_agent_callback
     import time
+
+    from personal_assistant.shared.callbacks import after_agent_callback
 
     ctx = MockContext(
         agent_name="research_agent",

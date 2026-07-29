@@ -5,8 +5,7 @@ Covers NFL, Cricket, and F1 scores, standings, and news.
 """
 
 import os
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 SPORTS_API_KEY = os.getenv("SPORTS_API_KEY", "")
 CRICAPI_KEY = os.getenv("CRICAPI_KEY", "")
@@ -41,7 +40,7 @@ _F1_MOCK_STANDINGS = {
 }
 
 
-def get_nfl_scores(week: Optional[int] = None, team: Optional[str] = None) -> dict:
+def get_nfl_scores(week: int | None = None, team: str | None = None) -> dict:
     """
     Get NFL game scores and results for a given week or team.
 
@@ -98,11 +97,11 @@ def get_nfl_scores(week: Optional[int] = None, team: Optional[str] = None) -> di
         "season": "2024",
         "games": mock_games,
         "source": "mock — configure SPORTS_API_KEY for live scores",
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
     }
 
 
-def get_nfl_standings(conference: Optional[str] = None) -> dict:
+def get_nfl_standings(conference: str | None = None) -> dict:
     """
     Get current NFL standings, optionally filtered by conference.
 
@@ -238,5 +237,5 @@ def get_cricket_scores(
         "recent_matches": mock_recent,
         "upcoming_matches": mock_upcoming,
         "source": "mock — configure CRICAPI_KEY for live scores",
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
     }

@@ -1,6 +1,7 @@
 """Serve.py security behavior tests."""
 
 import importlib
+
 from fastapi.testclient import TestClient
 
 

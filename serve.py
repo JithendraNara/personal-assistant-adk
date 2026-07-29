@@ -402,6 +402,9 @@ class SessionInfo(BaseModel):
     user_id: str
     created_at: str
 
+class WorkflowRunRequest(BaseModel):
+    state: dict[str, Any] = Field(default_factory=dict)
+
 class HealthResponse(BaseModel):
     status: str
     version: str
@@ -656,6 +659,52 @@ async def mission_control_session_detail(
             if event.get("session_id") == session_id
         ][:200],
     }
+
+
+@app.get("/workflows")
+@app.get("/api/workflows")
+async def list_workflows(
+    raw_request: Request,
+    auth_key: str = Depends(require_api_access),
+):
+    """List available ADK 2.0 graph-based workflows."""
+    enforce_rate_limit(f"http:list_workflows:{auth_key}:{_request_client_key(raw_request)}")
+    from personal_assistant.workflows import WORKFLOW_REGISTRY
+    return {
+        "workflows": [
+            {
+                "name": wf.name,
+                "description": wf.description,
+                "edge_count": len(wf.edges),
+            }
+            for wf in WORKFLOW_REGISTRY.values()
+        ]
+    }
+
+
+@app.post("/workflows/{workflow_name}/run")
+@app.post("/api/workflows/{workflow_name}/run")
+async def execute_workflow(
+    workflow_name: str,
+    request: WorkflowRunRequest,
+    raw_request: Request,
+    auth_key: str = Depends(require_api_access),
+):
+    """Execute an ADK 2.0 graph workflow deterministically."""
+    enforce_rate_limit(f"http:execute_workflow:{auth_key}:{_request_client_key(raw_request)}")
+    from personal_assistant.workflows import WORKFLOW_REGISTRY, run_workflow_by_name
+    if workflow_name not in WORKFLOW_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found.")
+
+    try:
+        final_state = run_workflow_by_name(workflow_name, request.state)
+        return {
+            "workflow": workflow_name,
+            "status": "completed",
+            "state": final_state,
+        }
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Workflow execution failed: {err}")
 
 
 @app.post("/chat", response_model=ChatResponse)

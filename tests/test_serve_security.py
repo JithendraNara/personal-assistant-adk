@@ -58,3 +58,31 @@ def test_mission_control_routes_require_auth_for_data(monkeypatch):
         payload = authorized.json()
         assert "overview" in payload
         assert "runtime" in payload
+
+
+def test_workflows_api_endpoints(monkeypatch):
+    serve = _load_serve(monkeypatch)
+    with TestClient(serve.app) as client:
+        # Unauthenticated request fails
+        res_unauth = client.get("/workflows")
+        assert res_unauth.status_code == 401
+
+        # Authenticated list workflows
+        res_list = client.get("/workflows", headers={"X-API-Key": "test-token"})
+        assert res_list.status_code == 200
+        wf_data = res_list.json()
+        assert "workflows" in wf_data
+        names = [w["name"] for w in wf_data["workflows"]]
+        assert "customer_refund_workflow" in names
+
+        # Execute refund workflow via API
+        res_run = client.post(
+            "/workflows/customer_refund_workflow/run",
+            headers={"X-API-Key": "test-token"},
+            json={"state": {"purchase_history": {"days_since_delivery": 5}}},
+        )
+        assert res_run.status_code == 200
+        run_data = res_run.json()
+        assert run_data["status"] == "completed"
+        assert run_data["state"]["status"] == "refunded"
+

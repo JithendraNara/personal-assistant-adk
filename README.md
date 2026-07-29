@@ -523,6 +523,56 @@ Manually trigger a memory save for a session.
 {"status": "saved"}
 ```
 
+#### `GET /workflows`
+List available ADK 2.0 graph-based workflows.
+
+**Response:**
+```json
+{
+  "workflows": [
+    {
+      "name": "customer_refund_workflow",
+      "description": "ADK 2.0 deterministic directed-graph workflow for customer refund processing.",
+      "edge_count": 5
+    },
+    {
+      "name": "incident_response_workflow",
+      "description": "ADK 2.0 deterministic graph workflow for incident triage and automated failover.",
+      "edge_count": 3
+    }
+  ]
+}
+```
+
+#### `POST /workflows/{workflow_name}/run`
+Execute an ADK 2.0 graph workflow with initial state inputs.
+
+**Request:**
+```json
+{
+  "state": {
+    "purchase_history": {
+      "days_since_delivery": 10
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "workflow": "customer_refund_workflow",
+  "status": "completed",
+  "state": {
+    "purchase_history": {"days_since_delivery": 10},
+    "is_eligible": true,
+    "status": "refunded",
+    "refund_tx": "TX_REFUND_99412",
+    "summary": "Refund workflow complete. Status: refunded, Tx: TX_REFUND_99412"
+  }
+}
+```
+
 ### Interactive API Docs
 
 When running in development mode, visit:

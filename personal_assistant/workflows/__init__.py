@@ -7,8 +7,6 @@ Separates application execution routing from open-ended language model calls.
 
 from typing import Any, Dict
 from google.adk.workflow import Workflow, START
-from google.adk.agents import LlmAgent
-from ..shared.config import DEFAULT_MODEL
 
 # ─── 1. Customer Refund Processing Workflow (ADK 2.0 Graph) ───────────────────
 
@@ -101,3 +99,33 @@ incident_response_workflow = Workflow(
         (evaluate_severity_rule, {True: trigger_auto_failover, False: log_minor_warning}),
     ]
 )
+
+WORKFLOW_REGISTRY: Dict[str, Workflow] = {
+    "customer_refund_workflow": customer_refund_workflow,
+    "incident_response_workflow": incident_response_workflow,
+}
+
+def run_workflow_by_name(name: str, initial_state: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Execute an ADK 2.0 graph workflow deterministically over state."""
+    state = dict(initial_state or {})
+    if name == "customer_refund_workflow":
+        if "purchase_history" not in state:
+            fetch_purchase_history(state)
+        is_eligible = evaluate_eligibility_rule(state)
+        if is_eligible:
+            issue_refund(state)
+        else:
+            reject_refund(state)
+        compose_notification(state)
+        return state
+    elif name == "incident_response_workflow":
+        if "system_metrics" not in state:
+            fetch_system_logs(state)
+        is_critical = evaluate_severity_rule(state)
+        if is_critical:
+            trigger_auto_failover(state)
+        else:
+            log_minor_warning(state)
+        return state
+    else:
+        raise ValueError(f"Unknown workflow: {name}")

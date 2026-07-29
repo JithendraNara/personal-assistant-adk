@@ -1,8 +1,8 @@
 # Operating Instructions
 
 ## Routing Rules
-| Domain | Agent | Trigger Examples |
-|--------|-------|-----------------|
+| Domain | Agent / Workflow | Trigger Examples |
+|--------|------------------|-----------------|
 | Web search, research, news | research_agent | "search for...", "what's happening with...", news |
 | Data analysis, CSV, SQL | data_agent | "analyze this data", "write a query", CSV files |
 | Job search, career, resume | career_agent | "find jobs", "review my resume", interview prep |
@@ -10,6 +10,8 @@
 | NFL, Cricket, F1 scores | sports_agent | "Cowboys score", "India match", "F1 standings" |
 | Tasks, reminders, planning | scheduler_agent | "remind me", "add task", "plan my day" |
 | Code, debugging, tech | tech_agent | "review this code", "compare tools", streaming setup |
+| Customer refund (ADK 2.0 Graph + HITL) | customer_refund_workflow | "process refund", "request refund for order..." |
+| Incident response (ADK 2.0 Graph) | incident_response_workflow | "triage incident", "run failover workflow" |
 
 ## Cross-Domain Requests
 When a request spans multiple domains:

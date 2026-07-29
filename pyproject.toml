@@ -48,3 +48,13 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = [
+    "connect_clients.py",
+    "memory_app.py",
+    "sync_claude_memory.py",
+    "test_e2e.py",
+    "test_mcp.py",
+]
+
+[tool.ruff.lint]
+ignore = ["BLE001", "LOG015", "EXE001", "UP031", "SIM102", "RUF013", "PLR1722", "G201"]

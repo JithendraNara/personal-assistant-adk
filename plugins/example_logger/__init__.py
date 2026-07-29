@@ -7,7 +7,7 @@ Hooks implemented: on_load, on_unload, before_turn, after_turn
 
 import json
 import logging
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger("plugin.example_logger")
 

@@ -403,6 +403,21 @@ parallel_sports   ├── (concurrent) → merged session state
 parallel_finance  ┘
 ```
 
+---
+
+### ADK 2.0 Graph Workflows (`google.adk.Workflow`)
+
+ADK 2.0 introduces deterministic directed-graph workflows (`personal_assistant/workflows`) that decouple execution routing from open-ended language model calls. Code-level rules and database operations run at native programmatic speeds without incurring LLM token costs or latency.
+
+```
+START ──► fetch_purchase_history ──► evaluate_eligibility ──┬──► True ──► issue_refund ──┐
+                                                            └──► False ─► reject_refund ┴──► compose_notification
+```
+
+**Included ADK 2.0 Workflows:**
+- `customer_refund_workflow`: Order lookup → eligibility evaluation → conditional refund branching → notification synthesis.
+- `incident_response_workflow`: Log collection → severity threshold check → auto-failover vs warning logging.
+
 **Trigger phrases:** "quick update", "what's happening", "give me a broad update"
 
 Results are available in `state["gathered_weather"]`, `state["gathered_sports"]`, and `state["gathered_finance"]`.
